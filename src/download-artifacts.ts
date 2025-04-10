@@ -1,5 +1,5 @@
 import { saveArtifact } from "./db/save-artifact";
-import { downloadArtifactZip } from "./download-artifact-zip";
+import { downloadArtifactZip } from "./download-artifact";
 import { fetchArtifactsList } from "./fetch-artifacts-list";
 import { getRunIdFromQuery } from "./utils";
 

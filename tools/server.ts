@@ -1,4 +1,4 @@
-import { unlink } from "fs/promises";
+import { readdir, unlink } from "fs/promises";
 import { ORG, REPO } from "../src/constants.ts";
 import { getInstallationToken } from "../src/github-auth.ts";
 let extract_jsons: ((zipBytes: Uint8Array) => any) | null = null;
@@ -119,11 +119,27 @@ const server = Bun.serve({
         });
       }
       try {
-        const artifacts = await fetchArtifactsListFromGitHub(runId);
-        return new Response(JSON.stringify({ artifacts }), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        });
+        if (runId === "test") {
+          const dirPath = "tests/fixtures/artifacts/source/";
+          const entries = await readdir(dirPath);
+          const artifacts = entries
+            .filter(name => name.endsWith(".zip"))
+            .map(name => ({
+              id: name.replace(".zip", ""),
+              name: name.replace(".zip", ""),
+              archive_download_url: "",
+            }));
+          return new Response(JSON.stringify({ artifacts }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        } else {
+          const artifacts = await fetchArtifactsListFromGitHub(runId);
+          return new Response(JSON.stringify({ artifacts }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }
       } catch (error) {
         console.error("Error fetching artifacts list:", error);
         return new Response(JSON.stringify({ error: error.message }), {
