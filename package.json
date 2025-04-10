@@ -1,11 +1,14 @@
 {
-  "name": "xp.ubq.fi",
-  "module": "index.ts",
-  "type": "module",
-  "devDependencies": {
-    "@types/bun": "latest"
+  "name": "minimal-deno-esbuild-app",
+  "version": "0.1.0",
+  "scripts": {
+    "build": "bun run build.ts",
+    "watch": "bun run watch.ts",
+    "type-check": "tsc --noEmit --watch",
+    "dev:server": "deno run --allow-read --allow-net server.ts",
+    "dev": "bun run watch.ts & tsc --noEmit --watch"
   },
-  "peerDependencies": {
-    "typescript": "^5.0.0"
+  "devDependencies": {
+    "esbuild": "^0.25.2"
   }
 }
