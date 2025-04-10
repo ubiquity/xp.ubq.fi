@@ -2,13 +2,15 @@
   "name": "minimal-deno-esbuild-app",
   "version": "0.1.0",
   "scripts": {
-    "build": "bun run build.ts",
-    "watch": "bun run watch.ts",
+    "build": "bun run tools/build.ts",
+    "watch": "bun run tools/watch.ts",
     "type-check": "tsc --noEmit --watch",
-    "dev:server": "deno run --allow-read --allow-net server.ts",
-    "dev": "bun run watch.ts & tsc --noEmit --watch"
+    "dev:server": "deno run --allow-read --allow-net tools/server.ts",
+    "all": "run-p watch type-check dev:server"
   },
   "devDependencies": {
-    "esbuild": "^0.25.2"
+    "esbuild": "^0.25.2",
+    "npm-run-all": "^4.1.5",
+    "typescript": "^5.8.3"
   }
 }
