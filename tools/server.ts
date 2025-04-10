@@ -1,4 +1,5 @@
 import { strFromU8, unzipSync } from "fflate";
+import { unlink } from "fs/promises";
 import { ORG, REPO } from "../src/constants.ts";
 import { getInstallationToken } from "../src/github-auth.ts";
 
@@ -153,17 +154,44 @@ const server = Bun.serve({
 
 console.log(`Server running on http://localhost:${server.port}`);
 
-// Automatically open browser
-try {
-  const url = `http://localhost:${server.port}`;
-  const openCommand =
-    process.platform === "darwin" ? "open" :
-    process.platform === "win32" ? "start" :
-    "xdg-open";
-  Bun.spawn([openCommand, url]);
-} catch (e) {
-  console.warn("Failed to open browser automatically:", e);
-}
+// Open browser only on first run
+(async () => {
+  const markerFile = Bun.file('.browser-opened');
+  if (!(await markerFile.exists())) {
+    try {
+      const url = `http://localhost:${server.port}`;
+      const openCommand =
+        process.platform === "darwin" ? "open" :
+        process.platform === "win32" ? "start" :
+        "xdg-open";
+      Bun.spawn([openCommand, url]);
+      await Bun.write('.browser-opened', 'opened');
+    } catch (e) {
+      console.warn("Failed to open browser automatically:", e);
+    }
+  }
+})();
+
+// Cleanup marker file on exit
+const cleanup = async () => {
+  try {
+    const markerFile = Bun.file('.browser-opened');
+    if (await markerFile.exists()) {
+      await unlink('.browser-opened');
+    }
+  } catch (e) {
+    console.warn("Failed to clean up .browser-opened:", e);
+  }
+};
+
+process.on("SIGINT", async () => {
+  await cleanup();
+  process.exit();
+});
+
+process.on("exit", async () => {
+  await cleanup();
+});
 
 function getContentType(path: string): string {
   if (path.endsWith(".html")) return "text/html";
