@@ -10,7 +10,7 @@ The Developer Performance Analytics Dashboard will be built using the following 
 - **D3.js**: Primary visualization library for custom charts
 - **Recharts**: React-based charting library for standard visualizations
 - **Redux Toolkit** or **React Context API**: For state management
-- **Tailwind CSS**: For styling and responsive design
+- **Plain CSS**: Direct CSS editing for styling and responsive design, with minimal styling in early phases
 - **React Query**: For data fetching and cache management
 
 ### Backend
@@ -60,6 +60,16 @@ The Developer Performance Analytics Dashboard will be built using the following 
    ```bash
    bun run build
    ```
+
+## Development Philosophy
+
+- **Rapid MVP**: Focus on getting a functional dashboard up quickly with minimal features
+- **Simplicity Over Proper Implementation**: Prioritize simple approaches that work over architecturally "correct" solutions
+- **Engineering First**: Focus initially on data processing, visualization logic, and core functionality
+- **Minimal Styling**: Keep styling minimal in early development phases to focus engineering efforts on functionality
+- **Progressive Enhancement**: Add styling later through direct CSS editing in Chrome DevTools
+- **Vision Through Usage**: Allow real-world usage of the MVP to clarify the vision before investing in comprehensive features
+- **Iterative Refinement**: Start with simple architecture, refine and properly implement once vision is clarified through actual usage
 
 ## Technical Constraints
 

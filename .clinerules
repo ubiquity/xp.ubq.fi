@@ -1,0 +1,54 @@
+# Developer Performance Analytics Dashboard - Project Intelligence
+
+## User Preferences
+
+- **CSS Approach**: Use plain CSS with direct editing in Chrome DevTools rather than frameworks like Tailwind. The user prefers to edit CSS directly in the browser and save to disk. Minimal styling in early development phases.
+- **Technology Selection**: Keep the tech stack simple and focused. Avoid unnecessary complexity.
+- **Development Philosophy**: Rapid MVP approach to get functional dashboard up quickly. Focus on simplicity over "proper" implementation until vision is clarified through real usage.
+
+## Implementation Patterns
+
+- **Data Visualization Approach**:
+  - Focus on flexible, dynamic visualization selection based on data dimensions
+  - Support permutations of any three data points in various chart types
+  - Automatically select appropriate chart type based on data characteristics
+
+- **Data Dimensions Categories**:
+  - Comment Types (ISSUE_SPECIFICATION, ISSUE_AUTHOR, ISSUE_ASSIGNEE, etc.)
+  - Quality Metrics (word count, readability score, relevance)
+  - Review Statistics (lines reviewed, review state)
+  - HTML Entities (code snippets, images, links)
+  - GitHub Events
+
+- **Chart Selection Logic**:
+  - If primary dimension is categorical (e.g., contributor): Use bar charts
+  - If primary dimension is time-based: Use line charts
+  - For three numeric dimensions: Use scatter plots
+  - For comparison across categories: Use stacked bar charts
+
+## Project Insights
+
+- The `text-conversation-rewards` module outputs to Supabase, making it the primary data source
+- The data structure is complex with nested properties and multiple metrics
+- Engineering managers and team leads are the primary users
+- Performance analytics should focus on both quantity and quality metrics
+- The project is repurposing an existing rewards system for developer performance insights
+- Initially focus on MVP with basic visualizations, refine based on real-world feedback
+
+## Known Challenges
+
+- Handling potentially large datasets while maintaining performance
+- Creating an intuitive interface that still allows flexible data analysis
+- Normalizing diverse metrics for meaningful comparison
+- Implementing intelligent chart type selection for any data combination
+- Supporting cross-filtering while maintaining responsive performance
+
+## Development Workflow
+
+- Use Bun for running TypeScript files and package installation
+- Prioritize rapid MVP development with simpler implementation
+- Focus on getting real data visualized quickly with minimal features
+- Minimize styling initially to focus on engineering aspects
+- Add styling later through direct CSS editing in browser
+- Start with simple architecture, refine once vision is clarified
+- Enhance and properly implement once MVP provides real insights

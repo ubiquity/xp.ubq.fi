@@ -1,11 +1,30 @@
 {
   "name": "xp.ubq.fi",
-  "module": "index.ts",
+  "module": "index.html",
   "type": "module",
+  "scripts": {
+    "start": "bun run src/server.ts",
+    "dev": "bun --hot run src/server.ts",
+    "build": "bun build src/index.tsx --outdir dist --target browser"
+  },
   "devDependencies": {
     "@types/bun": "latest"
   },
   "peerDependencies": {
     "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.4",
+    "@types/d3": "^7.4.3",
+    "@types/lodash": "^4.17.16",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.2",
+    "d3": "^7.9.0",
+    "date-fns": "^4.1.0",
+    "lodash": "^4.17.21",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-router-dom": "^7.5.0",
+    "recharts": "^2.15.2"
   }
 }
