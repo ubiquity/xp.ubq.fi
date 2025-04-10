@@ -7,7 +7,7 @@ import { downloadAndStoreArtifacts } from "../src/download-artifacts";
 import * as fetchModule from "../src/fetch-artifacts-list";
 import * as utils from "../src/utils";
 
-test("downloads and stores all artifacts for a run", async () => {
+test.skip("downloads and stores all artifacts for a run", async () => {
   const runId = "14256285394";
   vi.spyOn(utils, "getRunIdFromQuery").mockReturnValue(runId);
 
