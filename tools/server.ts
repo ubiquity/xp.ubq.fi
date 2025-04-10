@@ -47,23 +47,41 @@ const server = Bun.serve({
 
         const buffer = await ghRes.arrayBuffer();
         const zipData = new Uint8Array(buffer);
-        const unzipped = unzipSync(zipData);
+        const outerUnzipped = unzipSync(zipData);
 
-        const jsonEntry = Object.entries(unzipped).find(([name]) =>
-          name.endsWith(".json")
+        // Find the first nested zip file
+        const nestedZipEntry = Object.entries(outerUnzipped).find(([name]) =>
+          name.endsWith(".zip")
         );
-        if (!jsonEntry) {
-          throw new Error("No JSON file found in artifact zip");
+        if (!nestedZipEntry) {
+          throw new Error("No nested zip found in artifact");
         }
 
-        const jsonText = strFromU8(jsonEntry[1]);
-        const json = JSON.parse(jsonText);
+        const nestedZipData = nestedZipEntry[1];
+        const nestedUnzipped = unzipSync(nestedZipData);
 
-        console.log("Extracted JSON from artifact:", json);
-        return new Response(JSON.stringify(json), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        });
+        const files: { name: string; json: any }[] = [];
+        for (const [name, data] of Object.entries(nestedUnzipped)) {
+          if (name.endsWith(".json")) {
+            try {
+              const jsonText = strFromU8(data);
+              const json = JSON.parse(jsonText);
+              files.push({ name, json });
+            } catch (e) {
+              console.warn(`Failed to parse ${name}:`, e);
+            }
+          }
+        }
+
+        const directoryName = nestedZipEntry[0].replace(/\.zip$/, "");
+
+        return new Response(
+          JSON.stringify({ directoryName, files }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }
+        );
       } catch (error) {
         console.error("Error downloading artifact:", error);
         return new Response(JSON.stringify({ error: error.message }), {
