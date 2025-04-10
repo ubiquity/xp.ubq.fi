@@ -1,7 +1,14 @@
-import { strFromU8, unzipSync } from "fflate";
 import { unlink } from "fs/promises";
 import { ORG, REPO } from "../src/constants.ts";
 import { getInstallationToken } from "../src/github-auth.ts";
+let extract_jsons: ((zipBytes: Uint8Array) => any) | null = null;
+
+(async () => {
+  const wasmUnzipper = await import("../wasm-unzipper/pkg/wasm_unzipper.js");
+  await wasmUnzipper.default();
+  extract_jsons = wasmUnzipper.extract_jsons;
+  console.log("Rust WASM unzipper loaded");
+})();
 
 async function fetchArtifactsListFromGitHub(runId: string) {
   const token = await getInstallationToken();
@@ -34,50 +41,61 @@ const server = Bun.serve({
         });
       }
       try {
+        const t0 = performance.now();
+
         const token = await getInstallationToken();
-        const artifactUrl = `https://api.github.com/repos/${ORG}/${REPO}/actions/artifacts/${artifactId}/zip`;
-        const ghRes = await fetch(artifactUrl, {
-          headers: {
-            Accept: "application/vnd.github+json",
-            Authorization: `Bearer ${token}`,
-          },
-        });
-        if (!ghRes.ok) {
-          throw new Error(`GitHub API error: ${ghRes.status} ${ghRes.statusText}`);
-        }
 
-        const buffer = await ghRes.arrayBuffer();
-        const zipData = new Uint8Array(buffer);
-        const outerUnzipped = unzipSync(zipData);
+        const t1 = performance.now();
+        let t2 = t1;
 
-        // Find the first nested zip file
-        const nestedZipEntry = Object.entries(outerUnzipped).find(([name]) =>
-          name.endsWith(".zip")
-        );
-        if (!nestedZipEntry) {
-          throw new Error("No nested zip found in artifact");
-        }
+        let zipData: Uint8Array;
 
-        const nestedZipData = nestedZipEntry[1];
-        const nestedUnzipped = unzipSync(nestedZipData);
-
-        const files: { name: string; json: any }[] = [];
-        for (const [name, data] of Object.entries(nestedUnzipped)) {
-          if (name.endsWith(".json")) {
-            try {
-              const jsonText = strFromU8(data);
-              const json = JSON.parse(jsonText);
-              files.push({ name, json });
-            } catch (e) {
-              console.warn(`Failed to parse ${name}:`, e);
-            }
+        if (url.searchParams.get("run") === "test") {
+          console.log("Loading test fixture zip for artifact:", artifactId);
+          const path = `tests/fixtures/artifacts/source/${artifactId}.zip`;
+          const file = Bun.file(path);
+          if (!(await file.exists())) {
+            throw new Error(`Test fixture not found: ${path}`);
           }
+          zipData = new Uint8Array(await file.arrayBuffer());
+        } else {
+          const artifactUrl = `https://api.github.com/repos/${ORG}/${REPO}/actions/artifacts/${artifactId}/zip`;
+          const ghRes = await fetch(artifactUrl, {
+            headers: {
+              Accept: "application/vnd.github+json",
+              Authorization: `Bearer ${token}`,
+            },
+          });
+          if (!ghRes.ok) {
+            throw new Error(`GitHub API error: ${ghRes.status} ${ghRes.statusText}`);
+          }
+
+          const t2 = performance.now();
+
+          const buffer = await ghRes.arrayBuffer();
+          zipData = new Uint8Array(buffer);
         }
 
-        const directoryName = nestedZipEntry[0].replace(/\.zip$/, "");
+        const t3 = performance.now();
+
+        if (!extract_jsons) {
+          throw new Error("Rust WASM unzipper not loaded yet");
+        }
+
+        const t4 = performance.now();
+
+        const jsonArray = extract_jsons(zipData);
+
+        const t5 = performance.now();
+
+        console.log(`TIMING download token: ${(t1 - t0).toFixed(2)}ms`);
+        console.log(`TIMING fetch zip: ${(t2 - t1).toFixed(2)}ms`);
+        console.log(`TIMING read arrayBuffer: ${(t3 - t2).toFixed(2)}ms`);
+        console.log(`TIMING Rust WASM unzip+parse: ${(t5 - t4).toFixed(2)}ms`);
+        console.log(`TIMING total: ${(t5 - t0).toFixed(2)}ms`);
 
         return new Response(
-          JSON.stringify({ directoryName, files }),
+          JSON.stringify({ files: jsonArray }),
           {
             status: 200,
             headers: { "content-type": "application/json" },

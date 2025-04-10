@@ -2,6 +2,7 @@
   "name": "minimal-deno-esbuild-app",
   "version": "0.1.0",
   "scripts": {
+    "build:wasm": "cd wasm-unzipper && RUSTFLAGS=\"-C target-feature=+simd128\" cargo build --target wasm32-unknown-unknown --release",
     "build": "bun run tools/build.ts",
     "watch": "bun run tools/watch.ts",
     "type-check": "tsc --noEmit --watch",
@@ -13,7 +14,8 @@
     "bun-types": "^1.2.9",
     "esbuild": "^0.25.2",
     "npm-run-all": "^4.1.5",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vitest": "^3.1.1"
   },
   "dependencies": {
     "fflate": "^0.8.2",
