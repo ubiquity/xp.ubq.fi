@@ -5,7 +5,7 @@
     "build": "bun run tools/build.ts",
     "watch": "bun run tools/watch.ts",
     "type-check": "tsc --noEmit --watch",
-    "dev:server": "deno run --allow-read --allow-net tools/server.ts",
+    "dev:server": "deno run --allow-read --allow-net tools/server.ts | cat",
     "all": "run-p watch type-check dev:server"
   },
   "devDependencies": {
