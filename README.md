@@ -1,6 +1,6 @@
-# Minimal Bun + esbuild + Deno Deploy Template
+# Minimal Bun + esbuild Frontend Template
 
-A minimal starter template for building frontend apps with **HTML**, **CSS**, and **TypeScript**, bundled with **esbuild**, and served via **Deno** — ready for serverless deployment.
+A minimal starter template for building frontend apps with **HTML**, **CSS**, and **TypeScript**, bundled with **esbuild**, and managed with **Bun**. Includes artifact download and storage functionality.
 
 ---
 
@@ -9,8 +9,8 @@ A minimal starter template for building frontend apps with **HTML**, **CSS**, an
 - Plain HTML, CSS, and TypeScript (no frameworks)
 - Fast bundling with esbuild
 - Bun for scripting and package management
-- Minimal Deno static file server
-- Compatible with Deno Deploy
+- Minimal static file server (using Deno or can be replaced)
+- Artifact download and storage system
 
 ---
 
@@ -58,14 +58,30 @@ Navigate to the URL printed by the server (e.g., `http://localhost:PORT`).
 
 ```
 src/
-  index.html       # Main HTML file
-  style.css        # Styles
-  main.ts          # Entry TypeScript file
+  index.html                 # Main HTML file
+  style.css                  # Styles
+  main.ts                    # Entry TypeScript file
+  download-artifact.ts       # Fetches artifact data (JSON)
+  download-artifacts.ts      # Orchestrates artifact download and storage
+  fetch-artifacts-list.ts    # Fetches list of artifacts
+  github-auth.ts             # GitHub authentication helpers
+  utils.ts                   # Utility functions
+  types.ts                   # Shared types
+
+  db/
+    db-constants.ts          # DB constants
+    get-artifact.ts          # Retrieve artifacts from storage
+    get-db.ts                # IndexedDB setup
+    save-artifact.ts         # Save artifacts to storage
 
 tools/
-  build.ts         # esbuild bundler script
-  watch.ts         # esbuild watch mode
-  server.ts        # Deno static file server
+  build.ts                   # esbuild bundler script
+  watch.ts                   # esbuild watch mode
+  server.ts                  # Static file server (Deno or replaceable)
+  dev-server.ts              # Dev server script
+
+tests/
+  download-artifacts.test.ts # Tests for artifact download flow
 ```
 
 ---
@@ -73,8 +89,8 @@ tools/
 ## Deployment
 
 - Bundle your app with `bun run build`.
-- Deploy `dist/` and `src/` with your preferred static hosting or Deno Deploy.
-- The `tools/server.ts` can be adapted for serverless environments.
+- Deploy the output with your preferred static hosting.
+- The `tools/server.ts` can be adapted or replaced for serverless/static hosting.
 
 ---
 
