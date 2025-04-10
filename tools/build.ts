@@ -9,6 +9,4 @@ esbuild.build({
   sourcemap: true,
 }).then(() => {
   console.log("Build complete");
-}).catch((err) => {
-  console.error(err);
-});
+}).catch(console.error);
