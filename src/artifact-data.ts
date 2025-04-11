@@ -3,7 +3,7 @@ import { downloadAndStoreArtifacts } from "./download-artifacts";
 /**
  * Recursively converts Maps (and nested Maps) to plain JS objects/arrays.
  */
-function mapToObject(obj: any): any {
+export function mapToObject(obj: any): any {
   if (obj instanceof Map) {
     const result: Record<string, any> = {};
     for (const [key, value] of obj.entries()) {

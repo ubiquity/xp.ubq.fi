@@ -40,9 +40,27 @@ export type TimeSeriesEntry = {
  * Aggregates leaderboard data from nested artifact analytics.
  * Returns an array of contributors with total XP and per-repo breakdown.
  */
+type OrgRepoData = {
+  [org: string]: {
+    [repo: string]: {
+      [issue: string]: {
+        [contributor: string]: ContributorAnalytics;
+      };
+    };
+  };
+};
+
 export function getLeaderboardData(
-  data: any
+  data: OrgRepoData
 ): LeaderboardEntry[] {
+  console.log("getLeaderboardData input structure:", {
+    orgs: Object.keys(data),
+    sampleData: Object.entries(data as Record<string, Record<string, unknown>>).map(([org, repos]) => ({
+      org,
+      repos: Object.keys(repos),
+      sampleIssue: Object.entries(Object.values(repos)[0] || {})[0]?.[1] || null
+    }))
+  });
   // contributorKey: { userId, totalXP, repoBreakdown }
   const leaderboard: Map<string, LeaderboardEntry> = new Map();
 
@@ -70,7 +88,9 @@ export function getLeaderboardData(
     }
   }
 
-  return Array.from(leaderboard.values()).sort((a, b) => b.totalXP - a.totalXP);
+  const result = Array.from(leaderboard.values()).sort((a, b) => b.totalXP - a.totalXP);
+  console.log("getLeaderboardData result:", result);
+  return result;
 }
 
 /**
@@ -79,17 +99,22 @@ export function getLeaderboardData(
  * If no timestamp is available, uses synthetic order.
  */
 export function getTimeSeriesData(
-  data: any
+  data: OrgRepoData
 ): TimeSeriesEntry[] {
+  console.log("getTimeSeriesData input:", JSON.stringify(data, null, 2));
   // contributorKey: { userId, series: [{ time, xp, repo, issueOrPr }] }
   const seriesMap: Map<string, TimeSeriesEntry> = new Map();
 
   for (const org in data) {
+    console.log("Processing org:", org);
     const orgData = data[org];
     for (const repo in orgData) {
+      console.log("Processing repo:", repo);
       const repoData = orgData[repo];
       for (const issueOrPr in repoData) {
+        console.log("Processing issue/PR:", issueOrPr);
         const issueData = repoData[issueOrPr];
+        console.log("Issue data:", issueData);
         for (const contributor in issueData) {
           const analytics: ContributorAnalytics = issueData[contributor];
           if (!seriesMap.has(contributor)) {
@@ -138,5 +163,15 @@ export function getTimeSeriesData(
     });
   }
 
-  return Array.from(seriesMap.values());
+  const result = Array.from(seriesMap.values());
+  console.log("getTimeSeriesData results:", {
+    contributors: result.length,
+    samplesPerContributor: result.map(entry => ({
+      contributor: entry.contributor,
+      totalEvents: entry.series.length,
+      sampleEvents: entry.series.slice(0, 2),
+      totalXP: entry.series.reduce((sum, event) => sum + event.xp, 0)
+    }))
+  });
+  return result;
 }

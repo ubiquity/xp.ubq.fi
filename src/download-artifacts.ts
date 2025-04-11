@@ -61,10 +61,11 @@ export type ArtifactData = {
  */
 export async function downloadAndStoreArtifacts(
   onProgress: ProgressCallback = defaultProgress,
-  onError: ErrorCallback = defaultError
+  onError: ErrorCallback = defaultError,
+  explicitRunId?: string
 ): Promise<ArtifactData[]> {
   try {
-    const runId = getRunIdFromQuery();
+    const runId = explicitRunId ?? getRunIdFromQuery();
     if (!runId) {
       throw new Error("No run ID provided in query params");
     }

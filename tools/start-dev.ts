@@ -57,11 +57,7 @@ process.on("SIGINT", () => {
   process.exit(0);
 });
 
-// Open browser after short delay to ensure server is ready
-setTimeout(() => {
-  console.log("🌐 Opening browser...");
-  openURL(url);
-}, 1000);
+// Browser opening disabled to prevent auto-opening on every run
 
 // Watch frontend with esbuild (non-blocking)
 console.log("👀 Watching frontend files...");

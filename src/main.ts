@@ -1,10 +1,32 @@
-import { getUsableArtifacts } from "./artifact-data";
-import { getRunIdFromQuery, groupArtifactsByOrgRepoIssue } from "./utils";
-import { getLeaderboardData, getTimeSeriesData } from "./data-transform";
+import { getRunIdFromQuery } from "./utils";
 import { renderLeaderboardChart } from "./visualization/leaderboard-chart";
 import { renderTimeSeriesChart } from "./visualization/time-series-chart";
+import { loadArtifactData, cleanupWorker } from "./workers/artifact-worker-manager";
+import type { LeaderboardEntry, TimeSeriesEntry } from "./data-transform";
 
 type ViewMode = "leaderboard" | "timeseries";
+
+// Set up loading overlay
+const loadingOverlay = document.createElement("div");
+loadingOverlay.style.cssText = `
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(24, 26, 27, 0.9);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #00e0ff;
+  font-size: 16px;
+  z-index: 1000;
+`;
+
+const progressText = document.createElement("div");
+progressText.style.marginTop = "16px";
+loadingOverlay.appendChild(progressText);
 
 async function init() {
   try {
@@ -14,63 +36,19 @@ async function init() {
       return;
     }
 
-    // Get usable artifacts as a plain JS object
-    const artifacts = await getUsableArtifacts(
-      runId,
-      (phase: string, percent: number, detail?: string) => {
-        console.log(
-          `${phase}: ${Math.round(percent)}%${detail ? ` - ${detail}` : ""}`
-        );
-      },
-      (error: Error) => {
-        console.error(error);
-      }
-    );
-
-    // Make data available globally for debugging
-    (window as any).artifactsData = artifacts;
-
-    // --- Data transformation ---
-    // Log artifact keys to debug grouping
-    console.log("Artifact keys:", Object.keys(artifacts));
-    // Group flat artifacts into org -> repo -> issue/pr -> contributor structure
-    const groupedArtifacts = groupArtifactsByOrgRepoIssue(artifacts);
-    console.log("Grouped Artifacts:", groupedArtifacts);
-    // The groupedArtifacts object is: { [org]: { [repo]: { [issue]: { [contributor]: ContributorAnalytics } } } }
-    const leaderboardData = getLeaderboardData(groupedArtifacts);
-    const timeSeriesData = getTimeSeriesData(groupedArtifacts);
-    console.log("Leaderboard Data:", leaderboardData);
-    console.log("Time Series Data:", timeSeriesData);
-
-    // --- UI Elements ---
-    const chartArea = document.getElementById("xp-analytics-chart-area")!;
-    const contributorSelect = document.getElementById("contributor-select") as HTMLSelectElement;
-    const viewToggle = document.getElementById("view-toggle") as HTMLButtonElement;
-    const timeRange = document.getElementById("time-range") as HTMLInputElement;
-
-    // --- State ---
+    // --- State and Data ---
+    let leaderboardData: LeaderboardEntry[] = [];
+    let timeSeriesData: TimeSeriesEntry[] = [];
     let viewMode: ViewMode = "leaderboard";
     let selectedContributor: string = "All";
     let timeRangePercent: number = 100;
 
-    // --- Populate contributor dropdown ---
-    const allContributors = Array.from(
-      new Set([
-        ...leaderboardData.map((entry) => entry.contributor),
-        ...timeSeriesData.map((entry) => entry.contributor),
-      ])
-    ).sort((a, b) => a.localeCompare(b));
-    contributorSelect.innerHTML = "";
-    const allOption = document.createElement("option");
-    allOption.value = "All";
-    allOption.textContent = "All Contributors";
-    contributorSelect.appendChild(allOption);
-    allContributors.forEach((contributor) => {
-      const opt = document.createElement("option");
-      opt.value = contributor;
-      opt.textContent = contributor;
-      contributorSelect.appendChild(opt);
-    });
+    // --- UI Elements ---
+    const root = document.getElementById("xp-analytics-root")!;
+    const chartArea = document.getElementById("xp-analytics-chart-area")!;
+    const contributorSelect = document.getElementById("contributor-select") as HTMLSelectElement;
+    const viewToggle = document.getElementById("view-toggle") as HTMLButtonElement;
+    const timeRange = document.getElementById("time-range") as HTMLInputElement;
 
     // --- Render function ---
     function render() {
@@ -113,6 +91,29 @@ async function init() {
       viewToggle.textContent = viewMode === "leaderboard" ? "Leaderboard" : "Time Series";
     }
 
+    // --- Initialize UI with data ---
+    function initializeUI() {
+      const allContributors = Array.from(
+        new Set([
+          ...leaderboardData.map((entry) => entry.contributor),
+          ...timeSeriesData.map((entry) => entry.contributor),
+        ])
+      ).sort((a, b) => a.localeCompare(b));
+      contributorSelect.innerHTML = "";
+      const allOption = document.createElement("option");
+      allOption.value = "All";
+      allOption.textContent = "All Contributors";
+      contributorSelect.appendChild(allOption);
+      allContributors.forEach((contributor) => {
+        const opt = document.createElement("option");
+        opt.value = contributor;
+        opt.textContent = contributor;
+        contributorSelect.appendChild(opt);
+      });
+
+      render(); // Initial render
+    }
+
     // --- Event listeners ---
     contributorSelect.addEventListener("change", (e) => {
       selectedContributor = contributorSelect.value;
@@ -129,14 +130,45 @@ async function init() {
       render();
     });
 
-    // --- Initial render ---
-    render();
+    // Show loading overlay
+    root.style.position = "relative";
+    root.appendChild(loadingOverlay);
 
-    // Developer note
-    console.log(
-      "%c✨ Developer Note: Access all artifacts data via window.artifactsData",
-      "color: #00c853; font-weight: bold;"
-    );
+    // --- Load Data ---
+    await loadArtifactData(runId, {
+      onProgress: (phase, percent, detail) => {
+        progressText.textContent = `${phase}: ${Math.round(percent)}%${detail ? ` - ${detail}` : ""}`;
+      },
+      onError: (error) => {
+        console.error(error);
+        progressText.textContent = `Error: ${error.message}`;
+        progressText.style.color = "#ff2d2d";
+      },
+      onComplete: (data) => {
+        // Remove loading overlay
+        loadingOverlay.remove();
+
+        // Update data
+        leaderboardData = data.leaderboard;
+        timeSeriesData = data.timeSeries;
+
+        // Make data available for debugging
+        (window as any).analyticsData = data;
+        console.log(
+          "%c✨ Developer Note: Access all analytics data via window.analyticsData",
+          "color: #00e0ff; font-weight: bold;"
+        );
+        console.log("Leaderboard Data:", leaderboardData);
+        console.log("Time Series Data:", timeSeriesData);
+
+        // Initialize UI with data
+        initializeUI();
+      }
+    });
+
+
+    // Clean up on unload
+    window.addEventListener("unload", cleanupWorker);
   } catch (error) {
     console.error(error);
   }
