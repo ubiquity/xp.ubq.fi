@@ -15,6 +15,8 @@
 - Improved error handling for WASM operations.
 - Memory optimization for large artifacts.
 - More comprehensive testing of unzip operations.
+- Developer performance analytics visualizations (leaderboard and time series views).
+- Refined IndexedDB caching for instant analytics UI.
 
 ## Known Issues
 - Large artifacts may cause memory pressure during unzipping.
@@ -24,3 +26,5 @@
 
 ## Current Status
 The project successfully implements a minimal frontend that downloads and processes GitHub artifacts directly in the browser, working around Deno Deploy's compute limitations. WASM-based unzipping is functional but needs optimization for larger files and better error handling.
+
+Planning and implementation of developer analytics visualizations and IndexedDB-backed instant analytics UI is now underway.

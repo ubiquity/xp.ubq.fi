@@ -7,6 +7,17 @@
 - **Rust/WASM:** For performance-critical tasks or leveraging Rust libraries.
 - **Browser APIs:** Fetch API for network requests, IndexedDB for storage.
 
+## Visualization & Analytics
+- **IndexedDB-backed analytics:** All developer analytics and visualizations use data cached in IndexedDB for instant UI load.
+- **Charting:** Charts are rendered using SVG or Canvas in TypeScript, with no frameworks and minimal dependencies (e.g., uPlot, Chart.js via CDN if needed).
+- **Framework-free:** All analytics and visualization UI is implemented without frontend frameworks, in line with project constraints.
+
+## UI & CSS Constraints
+- Absolutely minimal CSS: only what is strictly necessary for layout and usability.
+- No colors, no custom fonts, no visual embellishments.
+- All spacing, sizing, and layout units must be in PX, and only in multiples of 4px (e.g., 4px, 8px, 12px, 16px, etc.).
+- All design/visual interest will be in the data visualizations themselves, not in the layout or UI.
+
 ## Development Setup
 - Use `bun install` to manage dependencies.
 - Build with `bun run build`.
