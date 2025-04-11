@@ -6,7 +6,7 @@
 - Fetching list of artifacts from API.
 - Downloading and storing artifact JSON data in IndexedDB.
 - Artifact download test is enabled and passing.
-- Clean separation from Rust/WASM components.
+- Basic WASM integration exists (e.g., `wasm-unzipper`).
 
 ## What's Left to Build
 - Improve UI for managing and viewing artifacts.
@@ -20,4 +20,4 @@
 - No integration with real backend API (if applicable).
 
 ## Current Status
-The project is a clean, minimal Bun + esbuild + TypeScript frontend with working artifact download and storage. Rust/WASM components are ignored and out of scope.
+The project is a minimal Bun + esbuild + TypeScript frontend with working artifact download/storage and integrated WASM components for specific tasks. Further refinement of WASM integration and UI is needed.

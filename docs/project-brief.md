@@ -10,8 +10,7 @@ A minimal frontend application built with **HTML**, **CSS**, and **TypeScript**,
 - Be easily deployable as static files with a minimal server.
 
 ## Out of Scope
-- All Rust/WASM-related code and features are **not** part of this project's core scope.
 - No complex backend logic; focus is on frontend and artifact handling.
 
 ## Status
-The project has been cleaned up to focus solely on the Bun + TypeScript frontend, with clear separation from any Rust components.
+The project includes a Bun + TypeScript frontend and integrates Rust/WASM components for specific functionalities (e.g., artifact processing).
