@@ -2,56 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>GitHub Artifacts Viewer</title>
+  <title>XP | UbiquityOS</title>
   <link rel="stylesheet" href="style.css" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 <body>
-  <header>
-    <h1>GitHub Artifacts Viewer</h1>
-  </header>
-
-  <main>
-    <section id="status-container">
-      <div class="card">
-        <h2>Processing Status</h2>
-        <div id="status">Initializing...</div>
-        <div id="progress-container">
-          <div id="progress-bar">
-            <div id="progress-fill"></div>
-          </div>
-          <div id="progress-text">0%</div>
-        </div>
-      </div>
-    </section>
-
-    <section id="error-container" class="hidden">
-      <div class="card error-card">
-        <h2>Error</h2>
-        <div id="error-message"></div>
-        <button id="retry-button">Retry</button>
-      </div>
-    </section>
-
-    <section id="artifacts-container" class="hidden">
-      <div class="card">
-        <h2>Available Artifacts</h2>
-        <ul id="artifacts-list"></ul>
-      </div>
-    </section>
-
-    <section id="results-container" class="hidden">
-      <div class="card">
-        <h2>Results</h2>
-        <div id="results"></div>
-      </div>
-    </section>
-  </main>
-
-  <footer>
-    <p>Using client-side WASM processing for GitHub artifacts</p>
-  </footer>
-
   <script src="../dist/bundle.js" type="module"></script>
 </body>
 </html>
