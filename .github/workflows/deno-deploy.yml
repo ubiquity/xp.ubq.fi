@@ -2,8 +2,8 @@ name: Deploy to Deno Deploy
 
 on:
   push:
-    branches:
-      - development
+    # branches:
+      # - development
 
 jobs:
   deploy:
