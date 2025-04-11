@@ -43,5 +43,6 @@ jobs:
         with:
           project: "xp-ubq-fi"
           entrypoint: "deno/artifact-proxy.ts"
+          include: dist/**
         env:
           DENO_DEPLOY_TOKEN: ${{ secrets.DENO_DEPLOY_TOKEN }}
