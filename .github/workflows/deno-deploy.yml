@@ -1,8 +1,4 @@
-name: Deploy to Deno Deploy
-
-permissions:
-  id-token: write # This is required for requesting the JWT
-  contents: read  # This is required for actions/checkout
+name: Deno Deploy
 
 on:
   push:
@@ -11,23 +7,29 @@ on:
 
 jobs:
   deploy:
+    name: Deploy to Deno Deploy
     runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write
+      contents: read
+
     steps:
-      - name: Checkout repository
+      - name: Clone repository
         uses: actions/checkout@v4
 
-      - name: Install Bun
-        run: |
-          curl -fsSL https://bun.sh/install | bash
-          echo "$HOME/.bun/bin" >> $GITHUB_PATH
+      - name: Setup Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: v1.x
 
       - name: Build UI
-        run: ~/.bun/bin/bun run tools/build.ts
+        run: bun run tools/build.ts
 
       - name: Deploy to Deno Deploy
         uses: denoland/deployctl@v1
         with:
-          project: xp.ubq.fi
-          entrypoint: deno/artifact-proxy.ts
+          project: "xp.ubq.fi"
+          entrypoint: "deno/artifact-proxy.ts"
         env:
           DENO_DEPLOY_TOKEN: ${{ secrets.DENO_DEPLOY_TOKEN }}
