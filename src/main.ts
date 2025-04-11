@@ -56,30 +56,27 @@ async function init() {
       return;
     }
 
-    updateStatus(`Starting artifact download (Run ID: ${runId})...`);
-
-    // Set up progress callback
-    const onProgress = (phase: string, percent: number, detail?: string) => {
-      let message = `${phase}: ${Math.round(percent)}%`;
-      if (detail) {
-        message += ` - ${detail}`;
-      }
-      updateStatus(message);
-      updateProgress(percent);
-    };
-
-    // Set up error callback
-    const onError = (error: Error) => {
-      showError(`Failed to process artifacts: ${error.message}`);
-      updateProgress(0);
-      updateStatus('Error occurred');
-    };
-
     // Download and unzip artifacts
-    await downloadAndStoreArtifacts(onProgress, onError);
+    const artifacts = await downloadAndStoreArtifacts(
+      // Progress callback
+      (phase: string, percent: number, detail?: string) => {
+        let message = `${phase}: ${Math.round(percent)}%`;
+        if (detail) {
+          message += ` - ${detail}`;
+        }
+        updateStatus(message);
+        updateProgress(percent);
+      },
+      // Error callback
+      (error: Error) => {
+        showError(`Failed to process artifacts: ${error.message}`);
+        updateProgress(0);
+        updateStatus('Error occurred');
+      }
+    );
 
     // Show the artifacts once they're loaded
-    await showResults();
+    await showResults(artifacts);
 
     updateStatus('All artifacts processed successfully');
     updateProgress(100);
@@ -94,26 +91,9 @@ async function init() {
 }
 
 // Display results from downloaded data
-async function showResults() {
+async function showResults(artifacts: ArtifactData[]) {
   updateStatus('Processing artifacts...');
   resultsEl.innerHTML = '';
-
-  // Download and process all artifacts
-  const artifacts = await downloadAndStoreArtifacts(
-    (phase, percent, detail) => {
-      let message = `${phase}: ${Math.round(percent)}%`;
-      if (detail) {
-        message += ` - ${detail}`;
-      }
-      updateStatus(message);
-      updateProgress(percent);
-    },
-    (error) => {
-      showError(`Failed to process artifacts: ${error.message}`);
-      updateProgress(0);
-      updateStatus('Error occurred');
-    }
-  );
 
   // Create a global object to store the data for exploration
   (window as any).artifactsData = {};
