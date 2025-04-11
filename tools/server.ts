@@ -281,6 +281,8 @@ const server = Bun.serve({
           headers: {
             "content-type": contentType,
             "access-control-allow-origin": "*",
+            "Cache-Control": "no-store",
+            "Pragma": "no-cache",
           },
         });
       } else {

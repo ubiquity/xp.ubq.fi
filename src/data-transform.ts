@@ -101,20 +101,14 @@ export function getLeaderboardData(
 export function getTimeSeriesData(
   data: OrgRepoData
 ): TimeSeriesEntry[] {
-  console.log("getTimeSeriesData input:", JSON.stringify(data, null, 2));
-  // contributorKey: { userId, series: [{ time, xp, repo, issueOrPr }] }
   const seriesMap: Map<string, TimeSeriesEntry> = new Map();
 
   for (const org in data) {
-    console.log("Processing org:", org);
     const orgData = data[org];
     for (const repo in orgData) {
-      console.log("Processing repo:", repo);
       const repoData = orgData[repo];
       for (const issueOrPr in repoData) {
-        console.log("Processing issue/PR:", issueOrPr);
         const issueData = repoData[issueOrPr];
-        console.log("Issue data:", issueData);
         for (const contributor in issueData) {
           const analytics: ContributorAnalytics = issueData[contributor];
           if (!seriesMap.has(contributor)) {

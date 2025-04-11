@@ -15,11 +15,31 @@ const buildOptions: BuildOptions = {
   }
 };
 
+function logRebuild(name: string, error?: esbuild.BuildFailure) {
+  if (error) {
+    console.error(`[esbuild] ${name} rebuild failed:`, error.errors?.[0]?.text || error.message);
+  } else {
+    console.log(`[esbuild] ${name} rebuilt successfully at ${new Date().toLocaleTimeString()}`);
+  }
+}
+
 // Create context for main bundle
 const mainCtx = await esbuild.context({
   ...buildOptions,
   entryPoints: ["src/main.ts"],
   outfile: "dist/bundle.js",
+  plugins: [{
+    name: "main-rebuild-logger",
+    setup(build) {
+      build.onEnd(result => {
+        if (result.errors.length > 0) {
+          logRebuild("main", { errors: result.errors, message: "Build failed" } as any);
+        } else {
+          logRebuild("main");
+        }
+      });
+    }
+  }]
 });
 
 // Create context for worker bundle
@@ -27,6 +47,18 @@ const workerCtx = await esbuild.context({
   ...buildOptions,
   entryPoints: ["src/workers/artifact-processor.ts"],
   outfile: "dist/artifact-processor.js",
+  plugins: [{
+    name: "worker-rebuild-logger",
+    setup(build) {
+      build.onEnd(result => {
+        if (result.errors.length > 0) {
+          logRebuild("worker", { errors: result.errors, message: "Build failed" } as any);
+        } else {
+          logRebuild("worker");
+        }
+      });
+    }
+  }]
 });
 
 // Start watching both bundles

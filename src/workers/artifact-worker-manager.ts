@@ -67,8 +67,6 @@ async function loadFromIndexedDB(): Promise<any | undefined> {
       },
       rawData: data
     });
-    // Log the full structure for debugging
-    console.log("Loaded IndexedDB data (full):", JSON.stringify(data, null, 2));
     return data;
   } catch (error) {
     console.warn("Failed to load from IndexedDB:", error);
