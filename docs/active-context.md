@@ -23,6 +23,14 @@
 - Implement error recovery for failed unzip operations.
 - Build leaderboard and time series views for contributor XP analytics.
 - Refine IndexedDB caching for instant analytics UI.
+- Unblock analytics/timeline work by ensuring artifact data includes timestamp, node_id, and precise URL for every XP event (enriched at build time, not runtime).
+
+## Blockers
+- **Timeline and analytics views are currently blocked.**
+- The root cause is that artifact data does not include enriched XP event metadata (timestamp, node_id, and precise URL for each XP event).
+- The current artifact only points to the parent issue, not the specific comment/PR/etc.
+- Fetching this data at runtime is not feasible due to the volume of fetches and the IndexedDB-backed instant analytics requirement.
+- The required solution is to enrich artifact data at build time (using the GitHub API) to include all necessary metadata for each XP event.
 
 ## Active Decisions
 - Focus is on Bun + TypeScript + esbuild + browser APIs, with WASM integration for specific tasks.
