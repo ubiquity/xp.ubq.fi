@@ -3,7 +3,6 @@ import type { Artifact } from "./types";
 export async function downloadArtifactZip(artifact: Artifact, runId?: string): Promise<Uint8Array> {
   const runParam = runId === "test" ? "&run=test" : "";
   const url = `/api/download-artifact?id=${encodeURIComponent(artifact.id.toString())}${runParam}`;
-  console.log("Fetching artifact from URL:", url);
 
   // Set headers to get raw ZIP data
   const response = await fetch(url, {

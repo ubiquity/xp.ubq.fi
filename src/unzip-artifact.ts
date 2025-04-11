@@ -20,40 +20,24 @@ function isValidZip(data: Uint8Array): boolean {
  * @throws {Error} When ZIP is invalid or extraction fails
  */
 export async function unzipArtifact(zipData: Uint8Array): Promise<any[]> {
-  // Validate the ZIP data
   if (!isValidZip(zipData)) {
-    console.error('Invalid ZIP file signature');
     throw new Error('Invalid ZIP file format: Corrupted or not a ZIP file');
   }
 
   if (zipData.length < 100) {
-    console.error('ZIP file too small:', zipData.length, 'bytes');
     throw new Error('ZIP file is too small to be valid');
   }
 
-  console.log(`Processing ZIP file (${zipData.length} bytes)`);
-
   try {
-    // Initialize WASM if not already initialized
     await initWasm();
-    console.log('WASM initialized successfully');
-
-    // Extract and parse JSON content from the zip data
     const jsonData = extract_jsons(zipData);
 
     if (Array.isArray(jsonData)) {
-      console.log(`Successfully extracted ${jsonData.length} JSON objects from zip`);
       return jsonData;
     } else {
-      console.error('Unexpected extraction result:', jsonData);
       throw new Error('ZIP extraction failed: No valid JSON data found');
     }
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error
-      ? error.message
-      : 'Unknown error during ZIP extraction';
-
-    console.error('Error unzipping artifact:', errorMessage);
-    throw new Error(`Failed to process ZIP file: ${errorMessage}`);
+    throw new Error(`Failed to process ZIP file: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }

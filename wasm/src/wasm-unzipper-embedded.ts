@@ -41,9 +41,8 @@ export async function initWasm(): Promise<void> {
   // --- Import Object Setup ---
   // Map JS functions to the names expected by the WASM module
 
-  imports.wbg.__wbg_log_c222819a41e063d3 = function(arg0: number) {
-    console.log(getObject(arg0)); // Use helper
-  };
+  // Disable WASM logging
+  imports.wbg.__wbg_log_c222819a41e063d3 = function(_arg0: number) {};
 
   imports.wbg.__wbg_new_405e22f390576ce2 = function() {
     const ret = new Object();
