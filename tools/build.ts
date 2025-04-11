@@ -1,8 +1,13 @@
-
 import * as esbuild from "esbuild";
+import { copyFileSync, mkdirSync, existsSync } from "fs";
 
-// Build main bundle
-const mainBuild = esbuild.build({
+// Ensure dist/ exists
+if (!existsSync("dist")) {
+  mkdirSync("dist");
+}
+
+// Build main bundle directly to dist/
+await esbuild.build({
   entryPoints: ["src/main.ts"],
   outfile: "dist/bundle.js",
   bundle: true,
@@ -11,8 +16,8 @@ const mainBuild = esbuild.build({
   sourcemap: true,
 });
 
-// Build worker bundle
-const workerBuild = esbuild.build({
+// Build worker bundle directly to dist/
+await esbuild.build({
   entryPoints: ["src/workers/artifact-processor.ts"],
   outfile: "dist/artifact-processor.js",
   bundle: true,
@@ -21,21 +26,10 @@ const workerBuild = esbuild.build({
   sourcemap: true,
 });
 
-import { copyFileSync, mkdirSync, existsSync } from "fs";
-
-// Ensure dist/ exists
-if (!existsSync("dist")) {
-  mkdirSync("dist");
-}
-
-// Copy static assets
+// Copy static assets as-is
 copyFileSync("src/index.html", "dist/index.html");
 if (existsSync("src/style.css")) {
   copyFileSync("src/style.css", "dist/style.css");
 }
 
-Promise.all([mainBuild, workerBuild])
-  .then(() => {
-    console.log("Build complete (main + worker + static assets)");
-  })
-  .catch(console.error);
+console.log("Build complete: dist/ contains index.html, bundle.js, style.css, and artifact-processor.js");
