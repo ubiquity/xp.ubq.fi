@@ -31,3 +31,4 @@ jobs:
           entrypoint: deno/artifact-proxy.ts
         env:
           DENO_DEPLOY_TOKEN: ${{ secrets.DENO_DEPLOY_TOKEN }}
+#
