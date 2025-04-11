@@ -49,7 +49,7 @@ async function init() {
   }
 
   // Deep JSON output with colorized label (JSON itself cannot be colorized natively)
-  const deepObj = mapToObject(window.artifactsData);
+  const deepObj = mapToObject(artifacts);
   console.log('%c[Deep JSON]', 'color: #ff9800;', JSON.stringify(deepObj, null, 2));
 
   // --- End Deep JSON rendering ---
