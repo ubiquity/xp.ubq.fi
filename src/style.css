@@ -149,20 +149,12 @@ button:hover {
   margin-bottom: 0.75rem;
   background-color: rgba(255, 255, 255, 0.05);
   border-radius: 4px;
-  transition: background-color 0.2s;
 }
 
-.result-item:hover {
-  background-color: rgba(255, 255, 255, 0.1);
-}
-
-.result-item strong {
-  color: var(--primary-color);
-}
-
-.result-item p {
-  margin: 0.5rem 0 0;
-  color: var(--text-secondary);
+.result-item pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 
 footer {

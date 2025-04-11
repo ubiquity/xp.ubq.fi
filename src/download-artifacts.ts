@@ -68,142 +68,74 @@ async function loadLocalArtifactZip(
   return files;
 }
 
+export type ArtifactData = {
+  name: string;
+  data: any[];
+};
+
 /**
- * Main function to download and store all artifacts
+ * Main function to download and process all artifacts
  */
 export async function downloadAndStoreArtifacts(
   onProgress: ProgressCallback = defaultProgress,
   onError: ErrorCallback = defaultError
-): Promise<void> {
+): Promise<ArtifactData[]> {
   try {
     const runId = getRunIdFromQuery();
     if (!runId) {
       throw new Error("No run ID provided in query params");
     }
 
-    // Test mode with local fixtures
-    if (runId === "test") {
-      console.log("[ARTIFACTS] Running in test mode, loading local fixture artifacts...");
-      onProgress('Initializing', 10, 'Loading test fixtures');
+    const results: ArtifactData[] = [];
+    const artifactsList = runId === "test" ? [
+      { id: 1, name: "results-ubiquity-os-marketplace", archive_download_url: "/api/download-artifact?id=results-ubiquity-os-marketplace&run=test" },
+      { id: 2, name: "results-ubiquity-os", archive_download_url: "/api/download-artifact?id=results-ubiquity-os&run=test" },
+      { id: 3, name: "results-ubiquity", archive_download_url: "/api/download-artifact?id=results-ubiquity&run=test" },
+    ] : await fetchArtifactsList(runId);
 
-      const testArtifacts = [
-        { id: "results-ubiquity-os-marketplace", name: "results-ubiquity-os-marketplace" },
-        { id: "results-ubiquity-os", name: "results-ubiquity-os" },
-        { id: "results-ubiquity", name: "results-ubiquity" },
-      ];
-
-      // Process each artifact sequentially
-      for (let i = 0; i < testArtifacts.length; i++) {
-        const artifact = testArtifacts[i];
-        const artifactNumber = i + 1;
-        const totalProgress = Math.floor((artifactNumber - 1) / testArtifacts.length * 100);
-
-        onProgress('Processing', totalProgress, `Artifact ${artifactNumber}/${testArtifacts.length}: ${artifact.name}`);
-
-        try {
-          // Get raw ZIP data and unzip in the browser
-          const extractedFiles = await loadLocalArtifactZip(
-            artifact.name,
-            (phase, phasePercent, detail) => {
-              // Calculate overall progress: combine artifact progress with phase progress
-              const artifactWeight = 100 / testArtifacts.length;
-              const overallPercent =
-                totalProgress +
-                (phasePercent / 100) * (artifactWeight / 2); // Each phase (download/unzip) is half of artifact weight
-
-              onProgress(
-                phase,
-                overallPercent,
-                detail || `${artifact.name} (${artifactNumber}/${testArtifacts.length})`
-              );
-            }
-          );
-
-          onProgress('Processing', totalProgress + 75 / testArtifacts.length, `Saving ${artifact.name}`);
-
-          // Convert to JSON and save
-          const jsonString = JSON.stringify(extractedFiles, null, 2);
-          console.log(`[PROCESS] JSON string length: ${jsonString.length} bytes`);
-          const blob = new Blob([jsonString], { type: "application/json" });
-          console.log(`[PROCESS] Created blob, size: ${blob.size} bytes`);
-
-          // Save to IndexedDB
-          await saveArtifact(artifact.name, blob);
-          console.log(`[STORAGE] Saved artifact: ${artifact.name}`);
-
-          // Update progress to artifact completion
-          onProgress(
-            'Processing',
-            Math.floor(artifactNumber / testArtifacts.length * 100),
-            `Completed ${artifactNumber}/${testArtifacts.length}`
-          );
-        } catch (error) {
-          console.error(`[ERROR] Processing artifact ${artifact.name}:`, error);
-          // Continue with next artifact even if this one fails
-          if (error instanceof Error) {
-            onError(error);
-          } else {
-            onError(new Error(`Unknown error processing ${artifact.name}`));
-          }
-        }
-      }
-
-      onProgress('Complete', 100, 'All test artifacts processed');
-      return;
-    }
-
-    // Real mode with GitHub artifacts
-    onProgress('Fetching', 0, 'Getting artifacts list');
-    const artifacts = await fetchArtifactsList(runId);
-    console.log(`[ARTIFACTS] Found ${artifacts.length} artifacts`);
-    onProgress('Fetching', 100, `Found ${artifacts.length} artifacts`);
-
-    // Process artifacts from GitHub
-    for (let i = 0; i < artifacts.length; i++) {
-      const artifact = artifacts[i];
+    // Process each artifact sequentially
+    for (let i = 0; i < artifactsList.length; i++) {
+      const artifact = artifactsList[i];
       const artifactNumber = i + 1;
-      const totalProgress = Math.floor((artifactNumber - 1) / artifacts.length * 100);
-
-      onProgress('Processing', totalProgress, `Artifact ${artifactNumber}/${artifacts.length}: ${artifact.name}`);
+      const totalProgress = Math.floor((artifactNumber - 1) / artifactsList.length * 100);
 
       try {
-        // Download artifact
-        onProgress('Downloading', 0, artifact.name);
-        const zipData = await downloadArtifactZip(artifact, runId);
-        onProgress('Downloading', 100, artifact.name);
+        // Download and process the artifact
+        const extractedFiles = runId === "test"
+          ? await loadLocalArtifactZip(
+              artifact.name,
+              (phase, phasePercent, detail) => {
+                const artifactWeight = 100 / artifactsList.length;
+                const overallPercent = totalProgress + (phasePercent / 100) * (artifactWeight / 2);
+                onProgress(phase, overallPercent, detail || `${artifact.name} (${artifactNumber}/${artifactsList.length})`);
+              }
+            )
+          : await downloadArtifactZip(artifact, runId).then(data => unzipArtifact(data));
 
-        // Unzip artifact
-        onProgress('Unzipping', 0, artifact.name);
-        const extractedFiles = await unzipArtifact(zipData);
-        onProgress('Unzipping', 100, artifact.name);
+        // Store the results
+        results.push({
+          name: artifact.name,
+          data: extractedFiles
+        });
 
-        // Save artifact
-        onProgress('Saving', 0, artifact.name);
-        const jsonString = JSON.stringify(extractedFiles, null, 2);
-        const blob = new Blob([jsonString], { type: "application/json" });
-        await saveArtifact(artifact.name, blob);
-        onProgress('Saving', 100, artifact.name);
+        // Report progress
+        const progress = Math.floor(artifactNumber / artifactsList.length * 100);
+        onProgress('Processing', progress, `Completed ${artifactNumber}/${artifactsList.length}`);
 
-        console.log(`[STORAGE] Saved artifact: ${artifact.name}`);
-
-        // Update progress to artifact completion
-        onProgress(
-          'Processing',
-          Math.floor(artifactNumber / artifacts.length * 100),
-          `Completed ${artifactNumber}/${artifacts.length}`
-        );
       } catch (error) {
         console.error(`[ERROR] Processing artifact ${artifact.name}:`, error);
-        // Continue with next artifact even if this one fails
         if (error instanceof Error) {
           onError(error);
         } else {
           onError(new Error(`Unknown error processing ${artifact.name}`));
         }
+        // Continue with next artifact even if this one fails
       }
     }
 
     onProgress('Complete', 100, 'All artifacts processed');
+    return results;
+
   } catch (error) {
     console.error("[ERROR] Fatal error in downloadAndStoreArtifacts:", error);
     if (error instanceof Error) {
@@ -211,5 +143,6 @@ export async function downloadAndStoreArtifacts(
     } else {
       onError(new Error("Unknown error occurred during artifact processing"));
     }
+    return []; // Return empty array on error
   }
 }

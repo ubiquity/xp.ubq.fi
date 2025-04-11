@@ -94,79 +94,68 @@ async function init() {
   }
 }
 
-// Display results from IndexedDB
+// Display results from downloaded data
 async function showResults() {
-  updateStatus('Loading results from storage...');
+  updateStatus('Processing artifacts...');
   resultsEl.innerHTML = '';
 
-  const artifactNames = [
-    "results-ubiquity-os-marketplace",
-    "results-ubiquity-os",
-    "results-ubiquity"
-  ];
-
-  let totalResults = 0;
-
-  for (const name of artifactNames) {
-    try {
-      updateStatus(`Loading artifact: ${name}`);
-      const blob = await getArtifact(name);
-
-      if (!blob) {
-        console.warn(`No data found for ${name}`);
-        continue;
+  // Download and process all artifacts
+  const artifacts = await downloadAndStoreArtifacts(
+    (phase, percent, detail) => {
+      let message = `${phase}: ${Math.round(percent)}%`;
+      if (detail) {
+        message += ` - ${detail}`;
       }
-
-      const text = await blob.text();
-      const data = JSON.parse(text);
-
-      // Handle both array and single object cases, and flatten if needed
-      let results = [];
-      if (Array.isArray(data)) {
-        results = data.flat();
-      } else if (typeof data === 'object' && data !== null) {
-        results = [data];
-      }
-
-      totalResults += results.length;
-
-      // Display in UI
-      const section = document.createElement('div');
-      section.className = 'results-section';
-
-      const header = document.createElement('h2');
-      header.textContent = name;
-      section.appendChild(header);
-
-      const count = document.createElement('p');
-      count.textContent = `Total Results: ${results.length}`;
-      section.appendChild(count);
-
-      const list = document.createElement('ul');
-      list.className = 'results-list';
-
-      results.forEach((item: any) => {
-        const li = document.createElement('li');
-        li.className = 'result-item';
-        li.innerHTML = `
-          <strong>${item.repository || 'Unknown Repo'}#${item.issue_number || 'N/A'}</strong>
-          <p>${item.title || 'No Title'}</p>
-        `;
-        list.appendChild(li);
-      });
-
-      section.appendChild(list);
-      resultsEl.appendChild(section);
-    } catch (error) {
-      console.error(`Error processing ${name}:`, error);
+      updateStatus(message);
+      updateProgress(percent);
+    },
+    (error) => {
+      showError(`Failed to process artifacts: ${error.message}`);
+      updateProgress(0);
+      updateStatus('Error occurred');
     }
-  }
+  );
 
-  if (totalResults > 0) {
+  // Create a global object to store the data for exploration
+  (window as any).artifactsData = {};
+  artifacts.forEach(artifact => {
+    (window as any).artifactsData[artifact.name] = artifact.data;
+  });
+
+  // Display raw data for verification
+  artifacts.forEach(artifact => {
+    const section = document.createElement('div');
+    section.className = 'results-section';
+
+    const header = document.createElement('h2');
+    header.textContent = artifact.name;
+    section.appendChild(header);
+
+    const count = document.createElement('p');
+    count.textContent = `Total Results: ${artifact.data.length}`;
+    section.appendChild(count);
+
+    const list = document.createElement('ul');
+    list.className = 'results-list';
+
+    // Simply dump raw JSON data
+    const li = document.createElement('li');
+    li.className = 'result-item';
+    li.innerHTML = `<pre>${JSON.stringify(artifact.data, null, 2)}</pre>`;
+    list.appendChild(li);
+
+    section.appendChild(list);
+    resultsEl.appendChild(section);
+
+    // Log to console for exploration
+    console.log(`Raw data for ${artifact.name}:`, artifact.data);
+  });
+
+  if (artifacts.length > 0) {
     resultsContainerEl.classList.remove('hidden');
-    updateStatus(`Displaying ${totalResults} total results`);
+    updateStatus(`Displaying ${artifacts.length} artifacts`);
   } else {
-    showError('No results found in storage. Try again with the retry button.');
+    showError('No artifacts found. Try again with the retry button.');
   }
 }
 
