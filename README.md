@@ -1,83 +1,55 @@
-# Minimal Bun + esbuild + Deno Deploy Template
+# GitHub Artifacts Viewer
 
-A minimal starter template for building frontend apps with **HTML**, **CSS**, and **TypeScript**, bundled with **esbuild**, and served via **Deno** — ready for serverless deployment.
-
----
+A minimal frontend application to download, unzip, and display GitHub artifacts directly in the browser using WASM.
 
 ## Features
 
-- Plain HTML, CSS, and TypeScript (no frameworks)
-- Fast bundling with esbuild
-- Bun for scripting and package management
-- Minimal Deno static file server
-- Compatible with Deno Deploy
+- Download GitHub artifacts directly in the browser
+- Process ZIP files using WebAssembly
+- Store and view results using IndexedDB
+- Minimal UI without frameworks
 
----
+## Development
 
-## Getting Started
+This project uses Bun and TypeScript for development.
 
-### 1. Install dependencies
+### Setup
 
-```bash
-bun install
-```
+1. Clone the repository
+2. Install dependencies with `bun install`
+3. Copy `.env.example` to `.env` and fill in your GitHub details
 
-### 2. Build the frontend
+### Development Commands
 
-```bash
-bun run build
-```
+- `bun run dev`: Start development environment with auto-restart (recommended)
+- `bun run build`: Build for production
+- `bun run start`: Start server without watching
 
-### 3. Start development server
+### Architecture
 
-In separate terminals, run:
-
-```bash
-bun run watch
-```
-
-and
-
-```bash
-bun run dev:server
-```
-
-Or run all at once:
-
-```bash
-bun run all
-```
-
-### 4. Open in browser
-
-Navigate to the URL printed by the server (e.g., `http://localhost:PORT`).
-
----
-
-## Project Structure
-
-```
-src/
-  index.html       # Main HTML file
-  style.css        # Styles
-  main.ts          # Entry TypeScript file
-
-tools/
-  build.ts         # esbuild bundler script
-  watch.ts         # esbuild watch mode
-  server.ts        # Deno static file server
-```
-
----
+- **Frontend**: Plain HTML, CSS, and TypeScript
+- **Backend**: Minimal Bun server in development, Deno Deploy for production
+- **WASM**: Rust-based ZIP processing for browser
 
 ## Deployment
 
-- Bundle your app with `bun run build`.
-- Deploy `dist/` and `src/` with your preferred static hosting or Deno Deploy.
-- The `tools/server.ts` can be adapted for serverless environments.
+The project is designed to be deployed to Deno Deploy:
 
----
+1. Build the project: `bun run build`
+2. Push the `deno/artifact-proxy.ts` file to Deno Deploy
+3. Set the required environment variables in the Deno Deploy dashboard
 
-## License
+## Environment Variables
 
-MIT
+- `GITHUB_TOKEN`: GitHub token with artifacts access
+- `ORG`: GitHub organization name
+- `REPO`: GitHub repository name
+- `DEBUG`: Set to "true" to enable verbose logging (optional)
+
+## Server Auto-Restart
+
+The development server will automatically restart when any server-related file changes, providing:
+
+- Real-time feedback for server changes
+- Automatic browser refresh for frontend changes
+- Colorized logging for easier debugging
