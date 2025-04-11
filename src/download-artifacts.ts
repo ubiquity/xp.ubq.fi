@@ -3,29 +3,34 @@ import { downloadArtifactZip } from "./download-artifact";
 import { fetchArtifactsList } from "./fetch-artifacts-list";
 import { getRunIdFromQuery } from "./utils";
 
-async function loadLocalArtifactZip(artifactName: string): Promise<any> {
-  console.log(`[API] Starting to load artifact: ${artifactName}`);
-  const url = `/api/download-artifact?id=${encodeURIComponent(artifactName)}&run=test`;
-  console.log(`[API] Fetching from URL: ${url}`);
+import { unzipArtifact } from "./unzip-artifact";
 
-  const response = await fetch(url);
-  console.log(`[API] Fetch response status: ${response.status}`);
+async function loadLocalArtifactZip(artifactName: string): Promise<any> {
+  console.log(`[UI] Starting to load artifact: ${artifactName}`);
+  const url = `/api/download-artifact?id=${encodeURIComponent(artifactName)}&run=test`;
+  console.log(`[UI] Fetching from URL: ${url}`);
+
+  // Set headers to get raw ZIP data
+  const response = await fetch(url, {
+    headers: {
+      'Accept': 'application/zip'
+    }
+  });
+  console.log(`[UI] Fetch response status: ${response.status}`);
 
   if (!response.ok) {
     throw new Error(`Failed to load artifact ${artifactName}: ${response.status}`);
   }
 
-  const data = await response.json();
-  console.log(`[API] Received JSON data for ${artifactName}`);
+  // Get the ZIP data as ArrayBuffer and convert to Uint8Array
+  const arrayBuffer = await response.arrayBuffer();
+  const zipData = new Uint8Array(arrayBuffer);
+  console.log(`[UI] Got ZIP data, size: ${zipData.length} bytes`);
 
-  // The API returns { files: [...] } format
-  if (data && data.files && Array.isArray(data.files)) {
-    console.log(`[API] Successfully parsed ${data.files.length} JSON objects from ${artifactName}`);
-    return data.files;
-  } else {
-    console.log(`[API] Unexpected response format:`, data);
-    return [];
-  }
+  // Extract JSON files from the ZIP
+  const files = await unzipArtifact(zipData);
+  console.log(`[UI] Successfully extracted ${files.length} files`);
+  return files;
 }
 
 export async function downloadAndStoreArtifacts(): Promise<void> {
@@ -46,9 +51,10 @@ export async function downloadAndStoreArtifacts(): Promise<void> {
     try {
       for (const artifact of testArtifacts) {
         console.log(`Loading local artifact: ${artifact.name}`);
-        const json = await loadLocalArtifactZip(artifact.name);
-        console.log(`Loaded JSON data for ${artifact.name}:`, json.length ? `${json.length} items` : 'empty array');
-        const jsonString = JSON.stringify(json, null, 2);
+        // Get raw ZIP data and unzip in the browser
+        const extractedFiles = await loadLocalArtifactZip(artifact.name);
+        console.log(`Processed ${artifact.name}:`, extractedFiles.length ? `${extractedFiles.length} items` : 'empty array');
+        const jsonString = JSON.stringify(extractedFiles, null, 2);
         console.log(`JSON string length: ${jsonString.length} bytes`);
         const blob = new Blob([jsonString], { type: "application/json" });
         console.log(`Created blob, size: ${blob.size} bytes`);
@@ -67,8 +73,11 @@ export async function downloadAndStoreArtifacts(): Promise<void> {
 
     for (const artifact of artifacts) {
       console.log(`Downloading artifact: ${artifact.name}`);
-      const json = await downloadArtifactZip(artifact, runId);
-      const jsonString = JSON.stringify(json, null, 2);
+      // Get raw ZIP data
+      const zipData = await downloadArtifactZip(artifact, runId);
+      // Extract JSON files
+      const extractedFiles = await unzipArtifact(zipData);
+      const jsonString = JSON.stringify(extractedFiles, null, 2);
       const blob = new Blob([jsonString], { type: "application/json" });
       await saveArtifact(artifact.name, blob);
       console.log(`Saved artifact: ${artifact.name}`);

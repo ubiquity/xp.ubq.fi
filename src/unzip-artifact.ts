@@ -1,4 +1,4 @@
-import { initWasm, extract_jsons } from './wasm-unzipper-embedded';
+import { extract_jsons, initWasm } from '../wasm/src/wasm-unzipper-embedded';
 
 export async function unzipArtifact(zipData: Uint8Array): Promise<any[]> {
   try {

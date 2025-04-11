@@ -1,14 +1,6 @@
 import { readdir, unlink } from "node:fs/promises";
 import { ORG, REPO } from "../src/constants.ts";
 import { getInstallationToken } from "../src/github-auth.ts";
-let extract_jsons: ((zipBytes: Uint8Array) => any) | null = null;
-
-(async () => {
-  const wasmUnzipper = await import("../wasm-unzipper/pkg/wasm_unzipper.js");
-  await wasmUnzipper.default();
-  extract_jsons = wasmUnzipper.extract_jsons;
-  console.log("Rust WASM unzipper loaded");
-})();
 
 async function fetchArtifactsListFromGitHub(runId: string) {
   const token = await getInstallationToken();
@@ -81,36 +73,20 @@ const server = Bun.serve({
 
         const t3 = performance.now();
 
-        if (!extract_jsons) {
-          throw new Error("Rust WASM unzipper not loaded yet");
-        }
-
-        const t4 = performance.now();
-
-        const jsonArray = extract_jsons(zipData);
-
-        const t5 = performance.now();
-
         console.log(`TIMING download token: ${(t1 - t0).toFixed(2)}ms`);
         console.log(`TIMING fetch zip: ${(t2 - t1).toFixed(2)}ms`);
         console.log(`TIMING read arrayBuffer: ${(t3 - t2).toFixed(2)}ms`);
-        console.log(`TIMING Rust WASM unzip+parse: ${(t5 - t4).toFixed(2)}ms`);
-        console.log(`TIMING total: ${(t5 - t0).toFixed(2)}ms`);
+        console.log(`TIMING total: ${(t3 - t0).toFixed(2)}ms`);
 
-        // Make sure we're sending a properly formatted JSON array
-        console.log(`SERVER: Sending ${jsonArray.length} JSON objects to client`);
-
-        // Debug the first few items to check their structure
-        if (jsonArray.length > 0) {
-          console.log(`SERVER: First JSON object sample:`,
-            JSON.stringify(jsonArray[0]).substring(0, 100) + '...');
-        }
-
+        // Return raw ZIP data
         return new Response(
-          JSON.stringify({ files: jsonArray }),
+          zipData,
           {
             status: 200,
-            headers: { "content-type": "application/json" },
+            headers: {
+              "content-type": "application/zip",
+              "content-length": zipData.length.toString()
+            },
           }
         );
       } catch (error) {
