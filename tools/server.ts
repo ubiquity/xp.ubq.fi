@@ -1,4 +1,4 @@
-import { readdir, unlink } from "fs/promises";
+import { readdir, unlink } from "node:fs/promises";
 import { ORG, REPO } from "../src/constants.ts";
 import { getInstallationToken } from "../src/github-auth.ts";
 let extract_jsons: ((zipBytes: Uint8Array) => any) | null = null;
@@ -41,6 +41,9 @@ const server = Bun.serve({
         });
       }
       try {
+        console.log("Request URL:", req.url);
+        console.log("Detected run param:", url.searchParams.get("run"));
+
         const t0 = performance.now();
 
         const token = await getInstallationToken();
@@ -52,7 +55,7 @@ const server = Bun.serve({
 
         if (url.searchParams.get("run") === "test") {
           console.log("Loading test fixture zip for artifact:", artifactId);
-          const path = `tests/fixtures/artifacts/source/${artifactId}.zip`;
+          const path = `tests/fixtures/artifacts/${artifactId}.zip`;
           const file = Bun.file(path);
           if (!(await file.exists())) {
             throw new Error(`Test fixture not found: ${path}`);
@@ -94,6 +97,15 @@ const server = Bun.serve({
         console.log(`TIMING Rust WASM unzip+parse: ${(t5 - t4).toFixed(2)}ms`);
         console.log(`TIMING total: ${(t5 - t0).toFixed(2)}ms`);
 
+        // Make sure we're sending a properly formatted JSON array
+        console.log(`SERVER: Sending ${jsonArray.length} JSON objects to client`);
+
+        // Debug the first few items to check their structure
+        if (jsonArray.length > 0) {
+          console.log(`SERVER: First JSON object sample:`,
+            JSON.stringify(jsonArray[0]).substring(0, 100) + '...');
+        }
+
         return new Response(
           JSON.stringify({ files: jsonArray }),
           {
@@ -120,7 +132,7 @@ const server = Bun.serve({
       }
       try {
         if (runId === "test") {
-          const dirPath = "tests/fixtures/artifacts/source/";
+          const dirPath = "./tests/fixtures/artifacts/";
           const entries = await readdir(dirPath);
           const artifacts = entries
             .filter(name => name.endsWith(".zip"))
@@ -152,7 +164,38 @@ const server = Bun.serve({
     // Serve static files
     let filePath = "";
 
-    if (pathname === "/") {
+    if (pathname.startsWith("/tests/fixtures/artifacts/")) {
+      const filePath = "." + pathname;
+      console.log(`[ZIP] Attempting to serve: ${filePath}`);
+      const file = Bun.file(filePath);
+      if (await file.exists()) {
+        const arrayBuffer = await file.arrayBuffer();
+        // Send raw ArrayBuffer with correct content type
+        const headers = new Headers({
+          "Content-Type": "application/octet-stream",
+          "Content-Length": arrayBuffer.byteLength.toString(),
+          "Access-Control-Allow-Origin": "*",
+        });
+        const uint8Array = new Uint8Array(arrayBuffer);
+        console.log(
+          `[ZIP] Serving file:`,
+          `\n- Path: ${filePath}`,
+          `\n- Size: ${arrayBuffer.byteLength} bytes`,
+          `\n- Headers:`, Object.fromEntries(headers.entries()),
+          `\n- First 16 bytes:`,
+          Array.from(uint8Array.slice(0, 16)),
+          `\n- Zip signature valid:`,
+          uint8Array[0] === 0x50 && uint8Array[1] === 0x4b && uint8Array[2] === 0x03 && uint8Array[3] === 0x04
+        );
+
+        // Return raw ArrayBuffer
+        const response = new Response(arrayBuffer, { headers });
+        return response;
+      } else {
+        console.log(`[ZIP] File not found: ${pathname}`);
+        return new Response("404 Not Found", { status: 404 });
+      }
+    } else if (pathname === "/") {
       filePath = "./src/index.html";
     } else if (pathname.startsWith("/dist/")) {
       filePath = "." + pathname;
@@ -193,7 +236,7 @@ console.log(`Server running on http://localhost:${server.port}`);
   const markerFile = Bun.file('.browser-opened');
   if (!(await markerFile.exists())) {
     try {
-      const url = `http://localhost:${server.port}`;
+      const url = `http://localhost:${server.port}?run=test`;
       const openCommand =
         process.platform === "darwin" ? "open" :
         process.platform === "win32" ? "start" :

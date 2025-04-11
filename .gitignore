@@ -48,4 +48,8 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 *.tgz
 .browser-opened
 
-wasm-unzipper/target
+
+tests/fixtures/artifacts/**/*.json
+tests/fixtures/artifacts/results-*/rewards_summary.csv
+tests/fixtures/artifacts/**/*.csv
+wasm/wasm-unzipper/target

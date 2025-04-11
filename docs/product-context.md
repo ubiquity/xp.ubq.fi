@@ -23,5 +23,4 @@ Developers need a **minimal, fast, framework-free frontend template** that integ
 - **Easy to extend** or customize for specific needs.
 
 ## Out of Scope
-- Rust/WASM features are **not** part of the core product experience.
 - No complex UI frameworks or backend logic.

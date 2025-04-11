@@ -4,6 +4,7 @@
 - **Bun:** Package manager, runtime, and script runner.
 - **esbuild:** Fast bundler for TypeScript and JavaScript.
 - **TypeScript:** Main language for app logic.
+- **Rust/WASM:** For performance-critical tasks or leveraging Rust libraries.
 - **Browser APIs:** Fetch API for network requests, IndexedDB for storage.
 
 ## Development Setup
@@ -18,7 +19,6 @@
 - No frontend frameworks (React, Vue, etc.).
 - Minimal dependencies beyond core tooling.
 - No backend server logic beyond static file serving.
-- Rust/WASM components are **ignored** and not part of the core tech stack.
 
 ## Dependencies
 - `fflate`: For compression/decompression (if needed).
