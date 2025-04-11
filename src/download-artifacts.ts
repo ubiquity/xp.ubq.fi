@@ -13,14 +13,9 @@ export type ProgressCallback = (
 
 export type ErrorCallback = (error: Error) => void;
 
-// Default callbacks that just log to console
-const defaultProgress: ProgressCallback = (phase, percent, detail) => {
-  console.log(`[PROGRESS] ${phase}: ${percent.toFixed(0)}% ${detail ? '- ' + detail : ''}`);
-};
-
-const defaultError: ErrorCallback = (error) => {
-  console.error('[ERROR]', error);
-};
+// Default no-op callbacks
+const defaultProgress: ProgressCallback = () => {};
+const defaultError: ErrorCallback = () => {};
 
 /**
  * Downloads and loads a single artifact ZIP file from the test fixtures
@@ -32,35 +27,23 @@ async function loadLocalArtifactZip(
   // Report start of download
   onProgress('Download', 0, artifactName);
 
-  const url = `/api/download-artifact?id=${encodeURIComponent(artifactName)}&run=test`;
-  console.log(`[DOWNLOAD] Fetching from URL: ${url}`);
-
-  // Set headers to get raw ZIP data
-  const response = await fetch(url, {
+  const response = await fetch(`/api/download-artifact?id=${encodeURIComponent(artifactName)}&run=test`, {
     headers: {
       'Accept': 'application/zip'
     }
   });
-  console.log(`[DOWNLOAD] Fetch response status: ${response.status}`);
 
   if (!response.ok) {
     throw new Error(`Failed to load artifact ${artifactName}: ${response.status}`);
   }
 
-  // Get the ZIP data as ArrayBuffer and convert to Uint8Array
   const arrayBuffer = await response.arrayBuffer();
   const zipData = new Uint8Array(arrayBuffer);
-  console.log(`[DOWNLOAD] Got ZIP data, size: ${zipData.length} bytes`);
 
-  // Report download complete
   onProgress('Download', 100, artifactName);
-
-  // Report start of unzipping
   onProgress('Unzipping', 0, artifactName);
 
-  // Extract JSON files from the ZIP
   const files = await unzipArtifact(zipData);
-  console.log(`[UNZIP] Successfully extracted ${files.length} files`);
 
   // Report unzipping complete
   onProgress('Unzipping', 100, artifactName);
@@ -123,7 +106,6 @@ export async function downloadAndStoreArtifacts(
         onProgress('Processing', progress, `Completed ${artifactNumber}/${artifactsList.length}`);
 
       } catch (error) {
-        console.error(`[ERROR] Processing artifact ${artifact.name}:`, error);
         if (error instanceof Error) {
           onError(error);
         } else {
@@ -137,7 +119,6 @@ export async function downloadAndStoreArtifacts(
     return results;
 
   } catch (error) {
-    console.error("[ERROR] Fatal error in downloadAndStoreArtifacts:", error);
     if (error instanceof Error) {
       onError(error);
     } else {

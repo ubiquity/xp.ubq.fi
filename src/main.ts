@@ -17,7 +17,6 @@ const resultsEl = document.getElementById('results') as HTMLDivElement;
 // UI Update Functions
 function updateStatus(message: string): void {
   statusEl.textContent = message;
-  console.log(`[STATUS] ${message}`);
 }
 
 function updateProgress(percent: number): void {
@@ -122,6 +121,8 @@ async function showResults() {
     (window as any).artifactsData[artifact.name] = artifact.data;
   });
 
+  console.log('%c✨ Developer Note: Access all artifacts data via window.artifactsData', 'color: #00c853; font-weight: bold;');
+
   // Display raw data for verification
   artifacts.forEach(artifact => {
     const section = document.createElement('div');
@@ -147,8 +148,6 @@ async function showResults() {
     section.appendChild(list);
     resultsEl.appendChild(section);
 
-    // Log to console for exploration
-    console.log(`Raw data for ${artifact.name}:`, artifact.data);
   });
 
   if (artifacts.length > 0) {
