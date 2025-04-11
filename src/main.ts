@@ -1,5 +1,6 @@
 import { getArtifact } from "./db/get-artifact";
 import { downloadAndStoreArtifacts } from "./download-artifacts";
+import type { ArtifactData } from "./download-artifacts";
 import { getRunIdFromQuery } from "./utils";
 
 // UI Elements
