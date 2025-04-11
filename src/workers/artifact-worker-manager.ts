@@ -32,13 +32,12 @@ function getWorker(): Worker {
  * Attempts to load artifact data from IndexedDB.
  * Returns undefined if no data is found.
  */
-async function loadFromIndexedDB(): Promise<any | undefined> {
+async function loadFromIndexedDB(runId: string): Promise<any | undefined> {
   try {
-    console.log("Attempting to load from IndexedDB...");
-    // Try to load the organization data
-    const orgKey = "ubiquity";
-    const orgData = await getArtifact(orgKey);
-    console.log("Organization data exists:", !!orgData);
+    console.log(`Attempting to load from IndexedDB for runId="${runId}"...`);
+    const dbKey = runId;
+    const orgData = await getArtifact(dbKey);
+    console.log(`Data exists for key "${dbKey}":`, !!orgData);
     if (!orgData) return undefined;
 
     // Parse organization blob into JSON
@@ -47,11 +46,11 @@ async function loadFromIndexedDB(): Promise<any | undefined> {
 
     // Create final data structure
     const data = {
-      [orgKey]: orgRepos
+      [dbKey]: orgRepos
     };
 
     console.log("Successfully loaded from IndexedDB:", {
-      org: orgKey,
+      key: dbKey,
       repos: Object.keys(orgRepos),
       diagnostics: {
         repoKeys: Object.keys(orgRepos),
@@ -81,23 +80,30 @@ export async function loadArtifactData(
   runId: string,
   callbacks: WorkerCallbacks = {}
 ): Promise<void> {
-  // First try loading from IndexedDB
-  const cachedData = await loadFromIndexedDB();
+  // First try loading from IndexedDB and show immediately if present
+  const cachedData = await loadFromIndexedDB(runId);
   if (cachedData) {
     console.log("Loaded data from IndexedDB");
+    const orgData = cachedData[runId] ?? {};
     callbacks.onComplete?.({
-      leaderboard: getLeaderboardData(cachedData),
-      timeSeries: getTimeSeriesData(cachedData)
+      leaderboard: getLeaderboardData({ [runId]: orgData }),
+      timeSeries: getTimeSeriesData({ [runId]: orgData })
     });
-    return;
+    // Do NOT return; continue to load fresh data in the background
+  } else {
+    // No cached data, clear the UI immediately
+    callbacks.onComplete?.({
+      leaderboard: [],
+      timeSeries: []
+    });
   }
 
-  // No cached data, use worker to process artifacts
+  // Always start worker-based processing to get fresh data
   console.log("Starting worker-based processing...");
   const worker = getWorker();
   console.log("Worker initialized");
 
-  worker.onmessage = (e) => {
+  worker.onmessage = async (e) => {
     const msg = e.data;
     switch (msg.type) {
       case "progress":
@@ -107,35 +113,51 @@ export async function loadArtifactData(
         callbacks.onError?.(new Error(msg.message));
         break;
       case "complete":
-    console.log("Worker completed, transforming data...");
-    console.log("Raw artifact data structure:", {
-      orgs: Object.keys(msg.data as object),
-      reposByOrg: Object.fromEntries(
-        Object.entries(msg.data as Record<string, Record<string, unknown>>).map(([org, repos]) => [
-          org,
-          Object.keys(repos)
-        ])
-      )
-    });
-    console.log("Grouped data structure (skipped):", {
-      orgs: Object.keys(msg.data as object),
-      reposByOrg: Object.fromEntries(
-        Object.entries(msg.data as Record<string, Record<string, unknown>>).map(([org, repos]) => [
-          org,
-          {
-            repos: Object.keys(repos),
-            totalIssues: Object.values(repos).reduce((acc, issues) =>
-              acc + Object.keys(issues).length, 0
-            )
-          }
-        ])
-      )
-    });
-    callbacks.onComplete?.({
-      leaderboard: getLeaderboardData(msg.data),
-      timeSeries: getTimeSeriesData(msg.data)
-    });
-    break;
+        console.log("Worker completed, transforming data...");
+        console.log("Raw artifact data structure:", {
+          orgs: Object.keys(msg.data as object),
+          reposByOrg: Object.fromEntries(
+            Object.entries(msg.data as Record<string, Record<string, unknown>>).map(([org, repos]) => [
+              org,
+              Object.keys(repos)
+            ])
+          )
+        });
+        console.log("Grouped data structure (skipped):", {
+          orgs: Object.keys(msg.data as object),
+          reposByOrg: Object.fromEntries(
+            Object.entries(msg.data as Record<string, Record<string, unknown>>).map(([org, repos]) => [
+              org,
+              {
+                repos: Object.keys(repos),
+                totalIssues: Object.values(repos).reduce(
+                  (acc: number, issues: unknown) =>
+                    acc + Object.keys(issues as object).length,
+                  0
+                )
+              }
+            ])
+          )
+        });
+
+        // Save fresh data to IndexedDB
+        try {
+          const dbKey = runId;
+          const blob = new Blob([JSON.stringify(msg.data[dbKey] ?? {})], { type: "application/json" });
+          const { saveArtifact } = await import("../db/save-artifact");
+          await saveArtifact(dbKey, blob);
+          console.log(`Updated IndexedDB with fresh data for key "${dbKey}".`);
+        } catch (err) {
+          console.warn("Failed to update IndexedDB with fresh data:", err);
+        }
+
+        // Update the view with fresh data
+        const orgData = msg.data[runId] ?? {};
+        callbacks.onComplete?.({
+          leaderboard: getLeaderboardData({ [runId]: orgData }),
+          timeSeries: getTimeSeriesData({ [runId]: orgData })
+        });
+        break;
     }
   };
 

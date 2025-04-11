@@ -114,16 +114,19 @@ const server = Bun.serve({
         let zipData: Uint8Array;
 
         // For test mode, serve from fixtures
-        if (url.searchParams.get("run") === "test") {
-          log("ZIP", `Using test fixture for: ${artifactId}`, colors.yellow);
+        const runParam = url.searchParams.get("run");
+        if (runParam === "test" || (runParam === "mini" && artifactId === "small-test-fixture")) {
+          log("ZIP", `Using fixture for: ${artifactId} (run=${runParam})`, colors.yellow);
 
           const fixturesPath = resolve(process.cwd(), "tests/fixtures/artifacts");
-          const zipPath = join(fixturesPath, `${artifactId}.zip`);
+          // For mini mode, always serve small-test-fixture.zip regardless of artifactId
+          const zipName = runParam === "mini" ? "small-test-fixture.zip" : `${artifactId}.zip`;
+          const zipPath = join(fixturesPath, zipName);
 
           log("ZIP", `Looking for fixture at: ${zipPath}`, colors.yellow);
 
           if (!(await ensureFileExists(zipPath))) {
-            throw new Error(`Test fixture not found: ${zipPath}`);
+            throw new Error(`Fixture not found: ${zipPath}`);
           }
 
           const file = Bun.file(zipPath);

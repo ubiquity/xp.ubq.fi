@@ -94,16 +94,16 @@ self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
 
       // Transform data into org/repo/issue structure
       console.log("Worker: Beginning data transformation...");
-      const transformed: TransformedData = {};
+      // Always use runId as the org key for storage and return
+      const runId = e.data.runId;
+      let transformed: TransformedData = { [runId]: {} };
       let firstArtifactLogged = false;
       for (const [key, data] of Object.entries(plainArtifacts)) {
-        // Example key: results-ubiquity-os-marketplace
-        const [_, org, ...repoParts] = key.split('-');
-        if (!org) continue;
+        // Example key: results-ubiquity-os-marketplace or small-test-fixture
+        const [_, __, ...repoParts] = key.split('-');
+        const repo = repoParts.join('-') || key; // fallback to key if no repoParts
 
-        const repo = repoParts.join('-');
-        if (!transformed[org]) transformed[org] = {};
-        if (!transformed[org][repo]) transformed[org][repo] = {};
+        if (!transformed[runId][repo]) transformed[runId][repo] = {};
 
         // Log the full data for the first artifact
         if (!firstArtifactLogged) {
@@ -117,7 +117,7 @@ self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
 
         // Ensure data is an array before processing
         if (Array.isArray(data)) {
-          console.log(`Worker: Processing ${data.length} items for ${org}/${repo} (type: ${typeof data[0]})`);
+          console.log(`Worker: Processing ${data.length} items for ${runId}/${repo} (type: ${typeof data[0]})`);
           if (data.length === 0) {
             console.log(`Worker: Artifact[${key}] is an empty array`);
           }
@@ -132,7 +132,7 @@ self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
                   filteredContributors[contrib] = analytics;
                 }
               }
-              transformed[org][repo][index.toString()] = filteredContributors;
+              transformed[runId][repo][index.toString()] = filteredContributors;
             }
           });
         } else {
@@ -158,9 +158,8 @@ self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
           ), 0
         )
       });
-      for (const [org, orgData] of Object.entries(transformed)) {
-        await saveArtifact(org, new Blob([JSON.stringify(orgData)]));
-      }
+      // Only save under the runId key
+      await saveArtifact(runId, new Blob([JSON.stringify(transformed[runId])]));
       console.log("Worker: All transformed data saved to IndexedDB");
 
       console.log("Worker: Processing complete, sending transformed data");

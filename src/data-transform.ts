@@ -147,14 +147,9 @@ export function getTimeSeriesData(
     }
   }
 
-  // Sort each contributor's series by time (if numeric), else by insertion order
+  // Sort each contributor's series by time (using comment id as proxy for time)
   for (const entry of seriesMap.values()) {
-    entry.series.sort((a, b) => {
-      if (typeof a.time === "number" && typeof b.time === "number") {
-        return a.time - b.time;
-      }
-      return 0;
-    });
+    entry.series.sort((a, b) => Number(a.time) - Number(b.time));
   }
 
   const result = Array.from(seriesMap.values());

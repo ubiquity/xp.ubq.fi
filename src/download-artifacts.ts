@@ -22,12 +22,13 @@ const defaultError: ErrorCallback = () => {};
  */
 async function loadLocalArtifactZip(
   artifactName: string,
+  runId: string,
   onProgress: ProgressCallback
 ): Promise<any> {
   // Report start of download
   onProgress('Download', 0, artifactName);
 
-  const response = await fetch(`/api/download-artifact?id=${encodeURIComponent(artifactName)}&run=test`, {
+  const response = await fetch(`/api/download-artifact?id=${encodeURIComponent(artifactName)}&run=${encodeURIComponent(runId)}`, {
     headers: {
       'Accept': 'application/zip'
     }
@@ -70,42 +71,73 @@ export async function downloadAndStoreArtifacts(
       throw new Error("No run ID provided in query params");
     }
 
+    // MINI MODE: Use the same pipeline as test, but with a single artifact
+    const isMini = runId === "mini";
+    const isTest = runId === "test";
     const results: ArtifactData[] = [];
-    const artifactsList = runId === "test" ? [
-      { id: 1, name: "results-ubiquity-os-marketplace", archive_download_url: "/api/download-artifact?id=results-ubiquity-os-marketplace&run=test" },
-      { id: 2, name: "results-ubiquity-os", archive_download_url: "/api/download-artifact?id=results-ubiquity-os&run=test" },
-      { id: 3, name: "results-ubiquity", archive_download_url: "/api/download-artifact?id=results-ubiquity&run=test" },
-    ] : await fetchArtifactsList(runId);
+    const artifactsList = isMini
+      ? [
+          {
+            id: 1,
+            name: "small-test-fixture",
+            archive_download_url: "/api/download-artifact?id=small-test-fixture&run=mini",
+          },
+        ]
+      : isTest
+      ? [
+          {
+            id: 1,
+            name: "results-ubiquity-os-marketplace",
+            archive_download_url: "/api/download-artifact?id=results-ubiquity-os-marketplace&run=test",
+          },
+          {
+            id: 2,
+            name: "results-ubiquity-os",
+            archive_download_url: "/api/download-artifact?id=results-ubiquity-os&run=test",
+          },
+          {
+            id: 3,
+            name: "results-ubiquity",
+            archive_download_url: "/api/download-artifact?id=results-ubiquity&run=test",
+          },
+        ]
+      : await fetchArtifactsList(runId);
 
     // Process each artifact sequentially
     for (let i = 0; i < artifactsList.length; i++) {
       const artifact = artifactsList[i];
       const artifactNumber = i + 1;
-      const totalProgress = Math.floor((artifactNumber - 1) / artifactsList.length * 100);
+      const totalProgress = Math.floor(((artifactNumber - 1) / artifactsList.length) * 100);
 
       try {
         // Download and process the artifact
-        const extractedFiles = runId === "test"
-          ? await loadLocalArtifactZip(
-              artifact.name,
-              (phase, phasePercent, detail) => {
-                const artifactWeight = 100 / artifactsList.length;
-                const overallPercent = totalProgress + (phasePercent / 100) * (artifactWeight / 2);
-                onProgress(phase, overallPercent, detail || `${artifact.name} (${artifactNumber}/${artifactsList.length})`);
-              }
-            )
-          : await downloadArtifactZip(artifact, runId).then(data => unzipArtifact(data));
+        const extractedFiles =
+          isMini || isTest
+            ? await loadLocalArtifactZip(
+                artifact.name,
+                runId,
+                (phase, phasePercent, detail) => {
+                  const artifactWeight = 100 / artifactsList.length;
+                  const overallPercent =
+                    totalProgress + (phasePercent / 100) * (artifactWeight / 2);
+                  onProgress(
+                    phase,
+                    overallPercent,
+                    detail || `${artifact.name} (${artifactNumber}/${artifactsList.length})`
+                  );
+                }
+              )
+            : await downloadArtifactZip(artifact, runId).then((data) => unzipArtifact(data));
 
         // Store the results
         results.push({
           name: artifact.name,
-          data: extractedFiles
+          data: extractedFiles,
         });
 
         // Report progress
-        const progress = Math.floor(artifactNumber / artifactsList.length * 100);
-        onProgress('Processing', progress, `Completed ${artifactNumber}/${artifactsList.length}`);
-
+        const progress = Math.floor((artifactNumber / artifactsList.length) * 100);
+        onProgress("Processing", progress, `Completed ${artifactNumber}/${artifactsList.length}`);
       } catch (error) {
         if (error instanceof Error) {
           onError(error);
