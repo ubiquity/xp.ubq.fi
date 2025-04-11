@@ -3,21 +3,24 @@
 ## What Works
 - Bun + esbuild build and dev environment.
 - Minimal frontend app with HTML, CSS, and TypeScript.
-- Fetching list of artifacts from API.
-- Downloading and storing artifact JSON data in IndexedDB.
-- Artifact download test is enabled and passing.
-- Basic WASM integration exists (e.g., `wasm-unzipper`).
+- Authentication proxy through Deno Deploy.
+- Direct GitHub artifact ZIP downloads.
+- Browser-side unzipping with WASM.
+- IndexedDB storage for processed artifacts.
+- Basic artifact download and processing tests.
 
 ## What's Left to Build
-- Improve UI for managing and viewing artifacts.
-- Add more tests for error handling and edge cases.
-- Optimize build/dev scripts if needed.
-- Optional: Deployment automation or serverless integration.
+- Enhanced UI feedback during ZIP processing.
+- Progress indicators for download/unzip operations.
+- Improved error handling for WASM operations.
+- Memory optimization for large artifacts.
+- More comprehensive testing of unzip operations.
 
 ## Known Issues
-- No UI for browsing stored artifacts yet.
-- Error handling could be more robust.
-- No integration with real backend API (if applicable).
+- Large artifacts may cause memory pressure during unzipping.
+- Error handling during unzip operations needs improvement.
+- Limited feedback during long-running operations.
+- Browser memory constraints may affect very large artifacts.
 
 ## Current Status
-The project is a minimal Bun + esbuild + TypeScript frontend with working artifact download/storage and integrated WASM components for specific tasks. Further refinement of WASM integration and UI is needed.
+The project successfully implements a minimal frontend that downloads and processes GitHub artifacts directly in the browser, working around Deno Deploy's compute limitations. WASM-based unzipping is functional but needs optimization for larger files and better error handling.
