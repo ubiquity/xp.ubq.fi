@@ -18,11 +18,12 @@
 ## Technical Constraints
 - No frontend frameworks (React, Vue, etc.).
 - Minimal dependencies beyond core tooling.
-- No backend server logic beyond static file serving.
+- Backend limited to auth proxy due to Deno Deploy's 50ms compute constraint.
+- ZIP processing must happen client-side using WASM.
 
 ## Dependencies
-- `fflate`: For compression/decompression (if needed).
-- `jose`: For JWT/JWE handling (if needed).
+- WASM unzipper: Critical for browser-side artifact processing.
+- `jose`: For JWT/JWE handling in auth proxy.
 - `npm-run-all`: For running multiple scripts concurrently.
 - `@types/bun`, `bun-types`: Type definitions.
 - `typescript`, `esbuild`: Tooling.

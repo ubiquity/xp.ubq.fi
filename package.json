@@ -7,7 +7,11 @@
     "watch": "bun run tools/watch.ts",
     "type-check": "tsc --noEmit --watch",
     "dev:server": "bun --hot run tools/server.ts",
-    "dev": "run-p watch type-check dev:server"
+    "dev:frontend": "run-p watch type-check",
+    "dev:enhanced": "bun run tools/dev.ts",
+    "dev:start-server": "bun --watch run tools/server.ts",
+    "dev": "bun run tools/start-dev.ts",
+    "start": "bun run tools/server.ts"
   },
   "devDependencies": {
     "@types/bun": "^1.2.9",
