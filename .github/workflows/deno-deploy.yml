@@ -41,7 +41,7 @@ jobs:
       - name: Deploy to Deno Deploy
         uses: denoland/deployctl@v1
         with:
-          project: "xp.ubq.fi"
+          project: "xp-ubq-fi"
           entrypoint: "deno/artifact-proxy.ts"
         env:
           DENO_DEPLOY_TOKEN: ${{ secrets.DENO_DEPLOY_TOKEN }}
