@@ -1,6 +1,6 @@
 import "./components/dev-mode-widget";
 import type { LeaderboardEntry, TimeSeriesEntry } from "./data-transform";
-import { getRunIdFromQuery, isProduction } from "./utils";
+import { cubicBezier, getRunIdFromQuery, isProduction } from "./utils";
 import { renderLeaderboardChart } from "./visualization/leaderboard-chart";
 import { renderTimeSeriesChart } from "./visualization/time-series-chart";
 import { cleanupWorker, loadArtifactData } from "./workers/artifact-worker-manager";
@@ -91,7 +91,8 @@ async function init() {
           // width: 720,
           height: 320,
           highlightContributor: selectedContributor !== "All" ? selectedContributor : timeSeriesData[0]?.contributor,
-          maxYValue: maxYValue
+          maxYValue: maxYValue,
+          timeRangePercent: timeRangePercent
         });
 
         // --- Human-readable time range label ---
@@ -120,43 +121,6 @@ async function init() {
       viewToggle.textContent = viewMode === "leaderboard" ? "Leaderboard" : "Time Series";
     }
 
-    // Cubic bezier easing function
-    function cubicBezier(x1: number, y1: number, x2: number, y2: number, t: number): number {
-      const cx = 3 * x1;
-      const bx = 3 * (x2 - x1) - cx;
-      const ax = 1 - cx - bx;
-      const cy = 3 * y1;
-      const by = 3 * (y2 - y1) - cy;
-      const ay = 1 - cy - by;
-
-      function sampleCurveX(t: number): number {
-        return ((ax * t + bx) * t + cx) * t;
-      }
-
-      function sampleCurveY(t: number): number {
-        return ((ay * t + by) * t + cy) * t;
-      }
-
-      function solveCurveX(x: number): number {
-        let t0 = 0;
-        let t1 = 1;
-        let t2 = x;
-
-        for (let i = 0; i < 8; i++) {
-          const x2 = sampleCurveX(t2);
-          if (Math.abs(x2 - x) < 0.001) return t2;
-          const d2 = (3 * ax * t2 + 2 * bx) * t2 + cx;
-          if (Math.abs(d2) < 0.000001) break;
-          t2 = t2 - (x2 - x) / d2;
-        }
-
-        let t = (x - sampleCurveX(t0)) / (sampleCurveX(t1) - sampleCurveX(t0));
-        return t;
-      }
-
-      return sampleCurveY(solveCurveX(t));
-    }
-
     function animateTimeline() {
       const startTime = performance.now();
       const duration = 2500; // 2.5 seconds
@@ -165,11 +129,11 @@ async function init() {
         const elapsed = currentTime - startTime;
         const progress = Math.min(elapsed / duration, 1);
 
-        // Apply cubic-bezier(0,1,1,1) easing
-        const eased = cubicBezier(0, 1, 1, 1, progress);
+        // Apply ease-in-out easing (cubic-bezier(0.42, 0, 0.58, 1))
+        const eased = cubicBezier(0.42, 0, 0.58, 1, progress);
 
-        timeRangePercent = Math.floor(eased * 100);
-        timeRange.value = String(timeRangePercent);
+        timeRangePercent = eased * 100;
+        timeRange.value = String(Math.floor(timeRangePercent));
         render();
 
         if (progress < 1) {

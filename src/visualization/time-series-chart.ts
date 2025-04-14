@@ -28,6 +28,7 @@ export function renderTimeSeriesChart(
     errorContributors?: string[]; // Optionally mark contributors as "bad"
     showLegend?: boolean;
     maxYValue?: number; // Maximum Y value to use for scaling
+    timeRangePercent?: number; // Current timeline percentage (0-100)
   }
 ) {
   // Get CSS variables
@@ -81,10 +82,12 @@ export function renderTimeSeriesChart(
   const minTime = Math.min(...allTimesPOSIX);
   const maxTime = Math.max(...allTimesPOSIX);
 
-  // For each contributor, build a cumulative XP array at their own event times only
+  // For each contributor, build a cumulative XP array with interpolation
   const contributorData = data.map(entry => {
     // Sort events by time
     const sortedSeries = [...entry.series].sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+
+    // Calculate cumulative points
     let cumulative = 0;
     const points = sortedSeries.map(pt => {
       cumulative += pt.xp;
@@ -93,10 +96,45 @@ export function renderTimeSeriesChart(
         xp: cumulative
       };
     });
+
+    // If we're not at 100%, filter/interpolate points
+    let finalPoints = points; // Default to all points if timeRangePercent is 100 or undefined
+    if (points.length > 0 && options?.timeRangePercent !== undefined && options.timeRangePercent < 100) {
+      const exactIndex = (points.length * options.timeRangePercent) / 100;
+      const lowerIndex = Math.floor(exactIndex);
+      const fraction = exactIndex - lowerIndex;
+
+      // Get points up to the integer index (ensure at least one point if possible)
+      finalPoints = points.slice(0, Math.max(1, lowerIndex + 1));
+
+      // If there's a fraction and we have a next point to interpolate with
+      if (fraction > 0 && lowerIndex < points.length - 1) {
+        const lowerPoint = points[lowerIndex];
+        const upperPoint = points[lowerIndex + 1];
+        // Check if points are valid before interpolating
+        if (lowerPoint && upperPoint && typeof lowerPoint.time === 'number' && typeof upperPoint.time === 'number' && typeof lowerPoint.xp === 'number' && typeof upperPoint.xp === 'number') {
+          const interpolatedPoint = {
+            time: lowerPoint.time + (upperPoint.time - lowerPoint.time) * fraction,
+            xp: lowerPoint.xp + (upperPoint.xp - lowerPoint.xp) * fraction
+          };
+          // Add the interpolated point
+          finalPoints.push(interpolatedPoint);
+        } else {
+           console.error("Interpolation source points invalid", { contributor: entry.contributor, lowerIndex, pointsLength: points.length });
+        }
+      }
+
+      // Safeguard: Ensure we always have at least one point if the original had points
+      if (points.length > 0 && finalPoints.length === 0) {
+          console.warn("Final points became empty during filtering, restoring first point.", { contributor: entry.contributor });
+          finalPoints = points.slice(0, 1);
+      }
+    }
+
     return {
       contributor: entry.contributor,
       userId: entry.userId,
-      points
+      points: finalPoints
     };
   });
 

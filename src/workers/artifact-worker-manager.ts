@@ -74,18 +74,19 @@ export async function loadArtifactData(
         leaderboard: getLeaderboardData({ [runId]: orgData }),
         timeSeries: getTimeSeriesData({ [runId]: orgData })
       });
+      console.log("Cache hit! Using data from IndexedDB.");
+      return; // <<<--- Return here if cache hit
     } else {
-      callbacks.onComplete({
-        leaderboard: [],
-        timeSeries: []
-      });
+      console.log("Cache miss. Proceeding with worker fetch.");
+      // Optionally, you could call onProgress here to indicate fetching starts
+      // callbacks.onProgress("Fetching", 0, "Starting download...");
     }
   } catch (error) {
     callbacks.onError(error instanceof Error ? error : new Error(String(error)));
-    return;
+    return; // Return on error during cache check
   }
 
-  // Always start worker-based processing to get fresh data
+  // Only start worker if cache miss
   console.log("Starting worker-based processing...");
   const worker = getWorker();
   console.log("Worker initialized");
