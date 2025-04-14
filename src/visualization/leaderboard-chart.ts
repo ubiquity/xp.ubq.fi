@@ -275,14 +275,30 @@ export function renderLeaderboardChart(
     // Temporarily position off-screen to measure
     xpLabel.setAttribute("x", "0");
     xpLabel.setAttribute("y", "-9999");
-    svg.appendChild(xpLabel);
-    // Measure text width
+    svg.appendChild(xpLabel); // Append temporarily to measure
+
+    // --- Conditional XP Label Placement ---
     const xpLabelWidth = xpLabel.getBBox().width;
-    // Clamp so label fits within right edge
-    const unclampedXpLabelX = x + 8;
-    const maxXpLabelX = width - rightMargin - xpLabelWidth;
-    const xpLabelX = Math.min(unclampedXpLabelX, maxXpLabelX);
-    xpLabel.setAttribute("x", xpLabelX.toString());
+    const barTotalWidth = (entry.totalXP / maxXP) * (width - leftMargin - rightMargin);
+    const labelPadding = 8; // Padding inside/outside the bar
+
+    if (xpLabelWidth + labelPadding < barTotalWidth) {
+        // Fits inside: Render black text, right-aligned inside the bar
+        xpLabel.setAttribute("fill", "#000"); // Black text
+        xpLabel.setAttribute("text-anchor", "end");
+        const labelX = leftMargin + barTotalWidth - labelPadding;
+        xpLabel.setAttribute("x", labelX.toString());
+    } else {
+        // Doesn't fit inside: Render standard color, left-aligned outside the bar
+        xpLabel.setAttribute("fill", isError ? BAD : isHighlight ? GOOD : GREY_LIGHT); // Original color logic
+        xpLabel.setAttribute("text-anchor", "start");
+        // Clamp position to the right edge
+        const unclampedXpLabelX = x + labelPadding; // Position to the right of the bar end (x)
+        const maxXpLabelX = width - rightMargin - xpLabelWidth; // Ensure it doesn't overflow chart
+        const labelX = Math.min(unclampedXpLabelX, maxXpLabelX);
+        xpLabel.setAttribute("x", labelX.toString());
+    }
+    // Set vertical position (same for both cases)
     xpLabel.setAttribute("y", (y + barHeight / 2 + 6).toString());
 
   });
