@@ -17,13 +17,13 @@ select {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background: #181a1b;
-  padding: 16px;
+  /* background: #181a1b; */
+  /* padding: 16px; */
   box-shadow: 0 0 16px #0004;
 }
 
 .xp-analytics-header {
-  margin-bottom: 16px;
+  padding: 16px;
 }
 .xp-analytics-header-row {
   display: flex;
@@ -66,7 +66,7 @@ select {
   width: 100%;
   background: #111;
   border-radius: 4px;
-  padding: 16px;
+  /* padding: 16px; */
   box-sizing: border-box;
   overflow: hidden;
   /* align-items: center; */

@@ -2,7 +2,7 @@
   position: fixed;
   bottom: 24px;
   right: 24px;
-  background: #1a1a1a;
+  /* background: #1a1a1a; */
   color: #fff;
   padding: 8px 0;
   border-radius: 4px;
@@ -12,8 +12,8 @@
   /* max-width: 400px; */
   /* max-height: 600px; */
   /* overflow-y: auto; */
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-  border: 1px solid #333;
+  /* box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); */
+  /* border: 1px solid #333; */
 }
 
 .dev-mode-widget__title {
@@ -31,11 +31,12 @@
 
 .workflow-run {
   margin: 8px 0;
-  padding: 8px;
+  padding: 8px 12px;
   border-radius: 4px;
   background: #222;
   cursor: pointer;
   transition: background 0.2s;
+  /* backdrop-filter: blur(12px); */
 }
 
 .workflow-run--active {
@@ -55,6 +56,7 @@
 
 .workflow-run__id {
   color: #66d9e8;
+  display: none;
 }
 
 .workflow-run__timestamp {

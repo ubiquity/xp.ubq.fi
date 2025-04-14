@@ -23,7 +23,7 @@ export class DevModeWidget extends HTMLElement {
 
     // Add title
     const title = document.createElement("div");
-    title.textContent = "Recent Runs";
+    title.textContent = "Recent Reports";
     title.className = "dev-mode-widget__title";
     this.container.insertBefore(title, this.runsContainer);
 
@@ -54,7 +54,7 @@ export class DevModeWidget extends HTMLElement {
       this.renderWorkflowRuns(cachedRuns, true);
     } else {
       // Show loading state if no cache
-      this.runsContainer.innerHTML = '<div class="dev-mode-widget__loading">Loading recent runs...</div>';
+      this.runsContainer.innerHTML = '<div class="dev-mode-widget__loading">Loading recent reports...</div>';
     }
 
     // 2. In parallel, fetch from API and update cache (do not re-render)
@@ -83,7 +83,14 @@ export class DevModeWidget extends HTMLElement {
       const runElement = document.createElement("div");
       runElement.className = `workflow-run${this.currentRunId === String(run.id) ? ' workflow-run--active' : ''}`;
 
-      const timestamp = new Date(run.created_at).toLocaleString();
+      const timestamp = new Date(run.created_at).toLocaleString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+      });
       let statusColor = "#63e6be"; // Default green
       let runDetail = "";
 
@@ -118,7 +125,7 @@ export class DevModeWidget extends HTMLElement {
       } else if (repo) {
         runDetail = repo;
       } else {
-        runDetail = "No workflow inputs found";
+        runDetail = "No inputs found";
         statusColor = "#ff6b6b";
       }
 
