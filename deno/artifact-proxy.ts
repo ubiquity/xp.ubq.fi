@@ -9,7 +9,7 @@ const APP_ID = Deno.env.get("APP_ID");
 const APP_INSTALLATION_ID = Deno.env.get("APP_INSTALLATION_ID");
 const APP_PRIVATE_KEY = Deno.env.get("APP_PRIVATE_KEY");
 const ORG = "ubiquity-os-marketplace";
-const REPO = Deno.env.get("REPO");
+const REPO = "text-conversation-rewards";
 const DEBUG = Deno.env.get("DEBUG") === "true";
 
 // Terminal colors for logging (only visible in development)
@@ -130,9 +130,7 @@ async function fetchArtifactsListFromGitHub(runId: string) {
   startTimer("fetchArtifactsList");
   log("API", `Fetching artifacts for run ID: ${runId}`, colors.blue);
 
-  if (!ORG || !REPO) {
-    throw new Error("ORG and REPO environment variables must be set");
-  }
+  // ORG and REPO are now hard-coded, so this check is not needed
 
   const token = await getInstallationToken();
   const url = `https://api.github.com/repos/${ORG}/${REPO}/actions/runs/${runId}/artifacts`;
@@ -264,6 +262,8 @@ Deno.serve(async (req: Request) => {
           const errorMessage = err instanceof Error ? err.message : String(err);
           log("ZIP", `Test fixture not found: ${errorMessage}`, colors.red);
           return jsonResponse({ error: `Test fixture not found: ${artifactId}.zip` }, 404);
+        }
+      } else {
         }
       } else {
         // Proxy to GitHub using App installation token
