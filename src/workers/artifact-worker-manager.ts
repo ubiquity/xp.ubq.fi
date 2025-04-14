@@ -5,6 +5,7 @@
 import type { LeaderboardEntry, OrgRepoData, TimeSeriesEntry } from "../data-transform";
 import { getLeaderboardData, getTimeSeriesData } from "../data-transform";
 import { getArtifact } from "../db/get-artifact";
+import { normalizeOrgRepoData } from "../normalize-org-repo-data";
 
 type WorkerCallbacks = {
   onProgress: (phase: string, percent: number, detail: string) => void;
@@ -67,7 +68,8 @@ export async function loadArtifactData(
   try {
     const cachedData = await loadFromIndexedDB(runId);
     if (cachedData) {
-      const orgData = cachedData[runId];
+      let orgData = cachedData[runId];
+      orgData = normalizeOrgRepoData({ [runId]: orgData }, runId)[runId];
       callbacks.onComplete({
         leaderboard: getLeaderboardData({ [runId]: orgData }),
         timeSeries: getTimeSeriesData({ [runId]: orgData })
@@ -103,7 +105,8 @@ export async function loadArtifactData(
           throw new Error("Invalid data received from worker");
         }
 
-        const orgData = msg.data[runId] as OrgRepoData[string];
+        let orgData = msg.data[runId] as OrgRepoData[string];
+        orgData = normalizeOrgRepoData({ [runId]: orgData }, runId)[runId];
 
         try {
           const blob = new Blob([JSON.stringify(orgData)], { type: "application/json" });
