@@ -41,11 +41,34 @@ export function renderTimeSeriesChart(
   const BG = "#181a1b";
 
   // --- Config ---
+  // SVG namespace
+  const svgNS = "http://www.w3.org/2000/svg";
+
   // Responsive width: use container's width or fallback to 600
   const width = options?.width ?? (container.clientWidth || container.getBoundingClientRect().width || 600);
   const height = options?.height ?? 320;
+
+  // Calculate dynamic margins based on label widths
+  const tempSvg = document.createElementNS(svgNS, "svg");
+  tempSvg.style.visibility = "hidden";
+  document.body.appendChild(tempSvg);
+
+  // Measure contributor label widths
+  let maxContributorWidth = 0;
+  data.forEach(entry => {
+    const label = document.createElementNS(svgNS, "text");
+    label.setAttribute("font-size", "14");
+    label.textContent = entry.contributor;
+    tempSvg.appendChild(label);
+    const labelWidth = label.getBBox().width;
+    maxContributorWidth = Math.max(maxContributorWidth, labelWidth);
+  });
+
+  document.body.removeChild(tempSvg);
+
+  // Set margins with padding
   const leftMargin = options?.leftMargin ?? 64;
-  const rightMargin = options?.rightMargin ?? 32;
+  const rightMargin = options?.rightMargin ?? Math.max(32, maxContributorWidth + 32); // base padding of 32px
   const topMargin = options?.topMargin ?? 32;
   const bottomMargin = options?.bottomMargin ?? 48;
   const highlightContributor = options?.highlightContributor ?? data[0]?.contributor;
@@ -87,7 +110,6 @@ export function renderTimeSeriesChart(
   });
 
   // SVG root
-  const svgNS = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(svgNS, "svg");
   svg.setAttribute("width", "100%");
   svg.setAttribute("height", height.toString());

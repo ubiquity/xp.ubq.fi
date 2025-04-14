@@ -43,13 +43,47 @@ export function renderLeaderboardChart(
   const BG = "#181a1b";
 
   // --- Config ---
+  // SVG namespace
+  const svgNS = "http://www.w3.org/2000/svg";
+
   // Responsive width: use container's width or fallback to 600
   const width = options?.width ?? (container.clientWidth || container.getBoundingClientRect().width || 600);
   const height = options?.height ?? Math.max(200, data.length * 32 + 64);
   const barHeight = options?.barHeight ?? 24;
   const barGap = options?.barGap ?? 8;
-  const leftMargin = options?.leftMargin ?? 120;
-  const rightMargin = options?.rightMargin ?? 32;
+
+  // Calculate dynamic margins based on label widths
+  const tempSvg = document.createElementNS(svgNS, "svg");
+  tempSvg.style.visibility = "hidden";
+  document.body.appendChild(tempSvg);
+
+  // Measure contributor label widths
+  let maxContributorWidth = 0;
+  data.forEach(entry => {
+    const label = document.createElementNS(svgNS, "text");
+    label.setAttribute("font-size", "16");
+    label.textContent = entry.contributor;
+    tempSvg.appendChild(label);
+    const labelWidth = label.getBBox().width;
+    maxContributorWidth = Math.max(maxContributorWidth, labelWidth);
+  });
+
+  // Measure XP label widths
+  let maxXpWidth = 0;
+  data.forEach(entry => {
+    const label = document.createElementNS(svgNS, "text");
+    label.setAttribute("font-size", "14");
+    label.textContent = `${entry.totalXP.toFixed(2)} XP`;
+    tempSvg.appendChild(label);
+    const labelWidth = label.getBBox().width;
+    maxXpWidth = Math.max(maxXpWidth, labelWidth);
+  });
+
+  document.body.removeChild(tempSvg);
+
+  // Set margins with padding
+  const leftMargin = options?.leftMargin ?? Math.max(120, maxContributorWidth + 32); // base padding of 32px
+  const rightMargin = options?.rightMargin ?? Math.max(32, maxXpWidth + 32); // base padding of 32px
   const topMargin = options?.topMargin ?? 32;
   const bottomMargin = options?.bottomMargin ?? 32;
   const highlightContributor = options?.highlightContributor ?? data[0]?.contributor;
@@ -64,7 +98,6 @@ export function renderLeaderboardChart(
   const maxXP = Math.max(...data.map(entry => entry.totalXP), 1);
 
   // SVG root
-  const svgNS = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(svgNS, "svg");
   svg.setAttribute("width", "100%");
   svg.setAttribute("height", height.toString());
