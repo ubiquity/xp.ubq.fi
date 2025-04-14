@@ -167,17 +167,21 @@ export function renderLeaderboardChart(
         rect.setAttribute("data-xp", issueXP.toString());
         rect.setAttribute("data-base-opacity", baseOpacity.toString());
 
-        // Add hover interactivity
+        // Make it look clickable
+        rect.style.cursor = "pointer";
+
+        // Add hover and click interactivity
         rect.addEventListener("mouseenter", (e) => {
           const target = e.target as SVGRectElement;
           target.setAttribute("opacity", "1");
           tooltip.style.display = "block";
 
           // Format tooltip content
-          const [repo, issue] = issueKey.split("#");
+          // Example: ubiquity-os-marketplace/text-conversation-rewards#279
+          const [repoPath, issueNum] = issueKey.split("#");
           tooltip.innerHTML = `
-            <div><strong>${repo}</strong></div>
-            <div>Issue #${issue}</div>
+            <div><strong>${repoPath}</strong></div>
+            <div>Issue #${issueNum}</div>
             <div>${issueXP.toFixed(2)} XP</div>
           `;
 
@@ -202,6 +206,13 @@ export function renderLeaderboardChart(
           const restoreOpacity = baseOpacity * (position + 1);
           target.setAttribute("opacity", isHighlight ? Math.min(1, restoreOpacity * 1.3).toString() : restoreOpacity.toString());
           tooltip.style.display = "none";
+        });
+
+        // Add click handler
+        rect.addEventListener("click", () => {
+          const [repoPath, issueNum] = issueKey.split("#");
+          // Example URL: https://github.com/ubiquity-os-marketplace/text-conversation-rewards/issues/279
+          window.open(`https://github.com/${repoPath}/issues/${issueNum}`, "_blank");
         });
 
         svg.appendChild(rect);

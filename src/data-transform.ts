@@ -135,6 +135,7 @@ export function getLeaderboardData(
           issuePrTracker.get(contributor)![repo].add(issueOrPr);
 
           // Track XP per issue (issueKey = repo#issueOrPr)
+          // Note: repo already includes org/ prefix
           const issueKey = `${repo}#${issueOrPr}`;
           if (!issueBreakdownTracker.has(contributor)) {
             issueBreakdownTracker.set(contributor, {});
@@ -182,6 +183,7 @@ export function transformAggregatedToOrgRepoData(
   aggregatedData: AggregatedResultEntry[],
   runId: string // Use runId as the top-level key
 ): OrgRepoData {
+  // Initialize with runId as top-level key
   const transformed: OrgRepoData = { [runId]: {} };
 
   if (!Array.isArray(aggregatedData)) {
@@ -194,7 +196,11 @@ export function transformAggregatedToOrgRepoData(
       throw new Error("Invalid entry: must be an object");
     }
 
-    const { repo, issueId, metadata } = entry;
+    const { org, repo, issueId, metadata } = entry;
+
+    if (!org || typeof org !== 'string') {
+      throw new Error("Missing or invalid org name");
+    }
 
     if (!repo || typeof repo !== 'string') {
       throw new Error("Missing or invalid repo name");
@@ -208,10 +214,13 @@ export function transformAggregatedToOrgRepoData(
       throw new Error("Missing or invalid metadata");
     }
 
-    // Initialize nested structure
+    // Construct the full repository path (org/repo format)
+    const fullRepoPath = `${org}/${repo}`;
+
+    // Initialize nested structure under runId
     transformed[runId] = transformed[runId] || {};
-    transformed[runId][repo] = transformed[runId][repo] || {};
-    transformed[runId][repo][issueId] = metadata;
+    transformed[runId][fullRepoPath] = transformed[runId][fullRepoPath] || {};
+    transformed[runId][fullRepoPath][issueId] = metadata;
   }
 
   console.log("Transformed Aggregated Data:", {
