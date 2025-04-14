@@ -45,6 +45,11 @@ async function init() {
     let selectedContributor: string = "All";
     let timeRangePercent: number = 100;
     let maxYValue: number = 1;
+    // let finalScores: { [contributor: string]: number } = {}; // Replaced by ranks
+    let ranks: { [contributor: string]: number } = {};
+    let highestScorer: string | null = null;
+    let globalMinTime: number | null = null;
+    let globalMaxTime: number | null = null;
 
     // --- UI Elements ---
     const root = document.getElementById("xp-analytics-root")!;
@@ -76,23 +81,39 @@ async function init() {
           ? timeSeriesData
           : timeSeriesData.filter((entry) => entry.contributor === selectedContributor);
 
-        // Apply time range filter (show only up to N% of the timeline)
-        if (filtered.length > 0 && timeRangePercent < 100) {
+        // Apply time range filter based on absolute time
+        if (filtered.length > 0 && timeRangePercent < 100 && globalMinTime !== null && globalMaxTime !== null) {
+          const timeRangeDuration = globalMaxTime - globalMinTime;
+          const cutoffTime = globalMinTime + timeRangeDuration * (timeRangePercent / 100);
+
           filtered = filtered.map((entry) => {
-            const cutoff = Math.floor((entry.series.length * timeRangePercent) / 100);
-            return {
-              ...entry,
-              series: entry.series.slice(0, Math.max(1, cutoff)),
-            };
-          });
+            // Filter points up to the cutoff time
+            const timeFilteredSeries = entry.series.filter(pt => new Date(pt.time).getTime() <= cutoffTime);
+
+            // Ensure at least one point remains if original series had points and cutoffTime is past the first point's time
+            if (entry.series.length > 0 && timeFilteredSeries.length === 0) {
+               const firstPointTime = new Date(entry.series[0].time).getTime();
+               if (cutoffTime >= firstPointTime) {
+                 return { ...entry, series: entry.series.slice(0, 1) };
+               } else {
+                 // If cutoff is before the first point, return empty series for this entry
+                 return { ...entry, series: [] };
+               }
+            }
+            return { ...entry, series: timeFilteredSeries };
+          }).filter(entry => entry.series.length > 0); // Remove entries with no points within the time range
         }
 
         renderTimeSeriesChart(filtered, chartArea, {
           // width: 720,
           height: 320,
-          highlightContributor: selectedContributor !== "All" ? selectedContributor : timeSeriesData[0]?.contributor,
+          highlightContributor: selectedContributor !== "All" ? selectedContributor : (highestScorer ?? undefined), // Use highest scorer if "All", pass undefined if null
           maxYValue: maxYValue,
-          timeRangePercent: timeRangePercent
+          timeRangePercent: timeRangePercent,
+          ranks: ranks, // Pass ranks for opacity calculation
+          minTime: globalMinTime, // Pass fixed min time
+          maxTime: globalMaxTime, // Pass fixed max time
+          animationProgress: timeRangePercent / 100 // Pass animation progress (0-1)
         });
 
         // --- Human-readable time range label ---
@@ -125,7 +146,11 @@ async function init() {
       const startTime = performance.now();
       const duration = 2500; // 2.5 seconds
 
+      let animationComplete = false; // Flag to stop passing progress after animation
+
       function animate(currentTime: number) {
+        if (animationComplete) return; // Stop animation loop if complete
+
         const elapsed = currentTime - startTime;
         const progress = Math.min(elapsed / duration, 1);
 
@@ -134,7 +159,7 @@ async function init() {
 
         timeRangePercent = eased * 100;
         timeRange.value = String(Math.floor(timeRangePercent));
-        render();
+        render(); // Render will now use timeRangePercent / 100 as animationProgress
 
         if (progress < 1) {
           requestAnimationFrame(animate);
@@ -142,6 +167,14 @@ async function init() {
       }
 
       requestAnimationFrame(animate);
+
+      // Set flag when animation should be done
+      setTimeout(() => {
+        animationComplete = true;
+        // Optional: Final render at 100% without animation progress
+        // timeRangePercent = 100;
+        // render();
+      }, duration);
     }
 
     // --- Initialize UI with data ---
@@ -174,6 +207,32 @@ async function init() {
           });
         });
       }
+
+      // Calculate ranks based on leaderboard totalXP for consistency
+      const scoresArray: [string, number][] = leaderboardData.map(entry => {
+        return [entry.contributor, entry.totalXP];
+      });
+
+      scoresArray.sort(([, scoreA], [, scoreB]) => scoreB - scoreA); // Sort descending by score
+
+      ranks = {};
+      highestScorer = scoresArray.length > 0 ? scoresArray[0][0] : null;
+      scoresArray.forEach(([contributor], index) => {
+        ranks[contributor] = index + 1; // Rank starts at 1
+      });
+
+      // Calculate global time range from full dataset
+      const allTimestampsFull: number[] = timeSeriesData.flatMap(entry =>
+        entry.series.map(pt => new Date(pt.time).getTime())
+      );
+      if (allTimestampsFull.length > 0) {
+        globalMinTime = Math.min(...allTimestampsFull);
+        globalMaxTime = Math.max(...allTimestampsFull);
+      } else {
+        globalMinTime = null;
+        globalMaxTime = null;
+      }
+
 
       // Set to timeseries view and render
       viewMode = "timeseries";

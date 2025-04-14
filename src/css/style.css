@@ -59,7 +59,7 @@ select {
   min-width: 120px;
 }
 .xp-analytics-time-range-input {
-  width: 160px;
+  width: 50vw;
 }
 .xp-analytics-chart-area {
   flex: 1;

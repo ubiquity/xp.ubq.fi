@@ -29,6 +29,10 @@ export function renderTimeSeriesChart(
     showLegend?: boolean;
     maxYValue?: number; // Maximum Y value to use for scaling
     timeRangePercent?: number; // Current timeline percentage (0-100)
+    ranks?: { [contributor: string]: number }; // Map of contributor ranks for opacity
+    minTime?: number | null; // Optional fixed minimum time for X-axis
+    maxTime?: number | null; // Optional fixed maximum time for X-axis
+    animationProgress?: number; // Optional animation progress (0-1) for fade-in effect
   }
 ) {
   // Get CSS variables
@@ -76,11 +80,9 @@ export function renderTimeSeriesChart(
   const showLegend = options?.showLegend ?? true;
 
   // --- Data flattening and axis scaling (no global alignment) ---
-  // Gather all points and determine global min/max for axis scaling
-  const allPoints = data.flatMap(entry => entry.series);
-  const allTimesPOSIX = allPoints.map(pt => new Date(pt.time).getTime());
-  const minTime = Math.min(...allTimesPOSIX);
-  const maxTime = Math.max(...allTimesPOSIX);
+  // Use provided time range if available, otherwise calculate from data
+  const minTime = options?.minTime ?? Math.min(...data.flatMap(entry => entry.series.map(pt => new Date(pt.time).getTime())));
+  const maxTime = options?.maxTime ?? Math.max(...data.flatMap(entry => entry.series.map(pt => new Date(pt.time).getTime())));
 
   // For each contributor, build a cumulative XP array with interpolation
   const contributorData = data.map(entry => {
@@ -97,48 +99,18 @@ export function renderTimeSeriesChart(
       };
     });
 
-    // If we're not at 100%, filter/interpolate points
-    let finalPoints = points; // Default to all points if timeRangePercent is 100 or undefined
-    if (points.length > 0 && options?.timeRangePercent !== undefined && options.timeRangePercent < 100) {
-      const exactIndex = (points.length * options.timeRangePercent) / 100;
-      const lowerIndex = Math.floor(exactIndex);
-      const fraction = exactIndex - lowerIndex;
-
-      // Get points up to the integer index (ensure at least one point if possible)
-      finalPoints = points.slice(0, Math.max(1, lowerIndex + 1));
-
-      // If there's a fraction and we have a next point to interpolate with
-      if (fraction > 0 && lowerIndex < points.length - 1) {
-        const lowerPoint = points[lowerIndex];
-        const upperPoint = points[lowerIndex + 1];
-        // Check if points are valid before interpolating
-        if (lowerPoint && upperPoint && typeof lowerPoint.time === 'number' && typeof upperPoint.time === 'number' && typeof lowerPoint.xp === 'number' && typeof upperPoint.xp === 'number') {
-          const interpolatedPoint = {
-            time: lowerPoint.time + (upperPoint.time - lowerPoint.time) * fraction,
-            xp: lowerPoint.xp + (upperPoint.xp - lowerPoint.xp) * fraction
-          };
-          // Add the interpolated point
-          finalPoints.push(interpolatedPoint);
-        } else {
-           console.error("Interpolation source points invalid", { contributor: entry.contributor, lowerIndex, pointsLength: points.length });
-        }
-      }
-
-      // Safeguard: Ensure we always have at least one point if the original had points
-      if (points.length > 0 && finalPoints.length === 0) {
-          console.warn("Final points became empty during filtering, restoring first point.", { contributor: entry.contributor });
-          finalPoints = points.slice(0, 1);
-      }
-    }
+    // The filtering based on absolute time is now done in main.ts before calling this function.
+    // The 'data' parameter received here already contains the correctly filtered points.
+    // Therefore, no additional filtering or interpolation based on timeRangePercent is needed here.
 
     return {
       contributor: entry.contributor,
       userId: entry.userId,
-      points: finalPoints
+      points: points // Use the points directly from the filtered data passed in
     };
   });
 
-  // Find max XP (cumulative, across all contributors and all times)
+  // Find max XP (cumulative, across all contributors and all times) for Y-axis scaling
   let maxXP = options?.maxYValue ?? 1;
   if (!options?.maxYValue) {
     contributorData.forEach(entry => {
@@ -173,16 +145,53 @@ export function renderTimeSeriesChart(
     svg.appendChild(line);
   }
 
+  // Sort data to draw highlighted contributor last (on top)
+  const sortedContributorData = [...contributorData].sort((a, b) => {
+    const aIsHighlight = a.contributor === highlightContributor;
+    const bIsHighlight = b.contributor === highlightContributor;
+    if (aIsHighlight && !bIsHighlight) return 1; // a comes after b
+    if (!aIsHighlight && bIsHighlight) return -1; // b comes after a
+    return 0; // Keep original order otherwise
+  });
+
   // --- Draw lines for each contributor (using their own event times) ---
-  contributorData.forEach((entry, idx) => {
+  sortedContributorData.forEach((entry, idx) => {
     const isHighlight = entry.contributor === highlightContributor;
     const isError = errorContributors.includes(entry.contributor);
 
-    // Map contributor's own points to SVG coordinates
-    const points = entry.points.map((pt, i) => {
-      const x =
+    // Calculate opacity based on rank
+    let opacity = 0.7; // Default opacity
+    const minOpacity = 0.2; // Minimum opacity to ensure visibility
+    if (options?.ranks) {
+      const rank = options.ranks[entry.contributor];
+      if (rank && rank > 0) {
+        opacity = Math.max(minOpacity, 1 / rank);
+      } else {
+        opacity = minOpacity; // Assign minimum if rank is missing or invalid
+      }
+    }
+
+    // Override opacity for highlight and error states
+    if (isHighlight) {
+      opacity = 1.0;
+    }
+    if (isError) {
+       opacity = 0.85; // Error opacity takes precedence over highlight
+      }
+     let finalOpacity = opacity; // Start with rank/highlight/error opacity
+
+     // Apply animation fade-in if progress is provided and less than 1
+     if (options?.animationProgress !== undefined && options.animationProgress < 1) {
+        // Multiply base opacity by progress, ensuring minimum visibility
+        finalOpacity = Math.max(0.05, finalOpacity * options.animationProgress);
+     }
+
+      // Map contributor's own points to SVG coordinates using the potentially fixed time range
+     const points = entry.points.map((pt, i) => {
+       const timeRangeDuration = (maxTime && minTime) ? (maxTime - minTime) : 1; // Avoid division by zero
+       const x =
         leftMargin +
-        ((pt.time - minTime) / (maxTime - minTime || 1)) *
+        (((pt.time ?? minTime ?? 0) - (minTime ?? 0)) / timeRangeDuration) *
           (width - leftMargin - rightMargin);
       const y =
         topMargin +
@@ -198,38 +207,42 @@ export function renderTimeSeriesChart(
         d += ` L ${points[i].x} ${points[i].y}`;
       }
       path.setAttribute("d", d);
+      // Stroke is always GOOD unless error
       path.setAttribute(
         "stroke",
-        isError ? BAD : isHighlight ? GOOD : `rgba(136,136,136,0.5)`
-      );
-      path.setAttribute("stroke-width", isHighlight ? "3" : "2");
-      path.setAttribute("fill", "none");
-      path.setAttribute("opacity", isError ? "0.85" : isHighlight ? "1" : "0.7");
-      svg.appendChild(path);
-    }
+         isError ? BAD : GOOD
+       );
+        path.setAttribute("stroke-width", "2"); // Constant stroke width for all lines
+        path.setAttribute("fill", "none");
+        path.setAttribute("opacity", finalOpacity.toString()); // Use finalOpacity
+       svg.appendChild(path);
+     }
 
     // Draw points
     points.forEach((pt, i) => {
       const circle = document.createElementNS(svgNS, "circle");
       circle.setAttribute("cx", pt.x.toString());
-      circle.setAttribute("cy", pt.y.toString());
-      circle.setAttribute("r", isHighlight ? "2" : "1");
-      circle.setAttribute(
+       circle.setAttribute("cy", pt.y.toString());
+       circle.setAttribute("r", "2"); // Constant radius for all points
+       // Fill is always GOOD unless error
+       circle.setAttribute(
         "fill",
-        isError ? BAD : isHighlight ? GOOD : GREY_LIGHT
-      );
-      circle.setAttribute("opacity", isError ? "0.85" : isHighlight ? "1" : "0.7");
-      svg.appendChild(circle);
-    });
+         isError ? BAD : GOOD
+       );
+       circle.setAttribute("opacity", finalOpacity.toString()); // Use finalOpacity
+       svg.appendChild(circle);
+     });
 
     // Contributor label (right side, dynamically clamp and avoid collision with line/point)
     if (points.length > 0) {
       const label = document.createElementNS(svgNS, "text");
       label.setAttribute("font-size", "14");
-      label.setAttribute("fill", isError ? BAD : isHighlight ? GOOD : GREY);
-      label.setAttribute("font-weight", isHighlight ? "bold" : "normal");
-      label.setAttribute("text-anchor", "start");
-      label.textContent = entry.contributor;
+       // Label color is always GOOD unless error
+        label.setAttribute("fill", isError ? BAD : GOOD);
+        label.setAttribute("opacity", finalOpacity.toString()); // Use finalOpacity
+        // label.setAttribute("font-weight", isHighlight ? "bold" : "normal"); // Remove bold for highlight for consistency
+        label.setAttribute("text-anchor", "start");
+       label.textContent = entry.contributor;
       // Temporarily position off-screen to measure
       label.setAttribute("x", "0");
       label.setAttribute("y", "-9999");
