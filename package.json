@@ -9,7 +9,7 @@
     "dev:frontend": "run-p watch type-check",
     "dev:enhanced": "bun run tools/dev.ts",
     "dev:start-server": "bun --watch run tools/server.ts",
-    "dev": "bun run tools/start-dev.ts",
+    "dev": "rm -rf dist && bun run tools/start-dev.ts",
     "start": "bun run tools/server.ts"
   },
   "devDependencies": {
