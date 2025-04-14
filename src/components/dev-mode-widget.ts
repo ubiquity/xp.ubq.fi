@@ -11,23 +11,6 @@ export class DevModeWidget extends HTMLElement {
 
     this.container = document.createElement("div");
     this.container.className = "dev-mode-widget";
-    this.container.style.cssText = `
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
-      background: #1a1a1a;
-      color: #fff;
-      padding: 15px;
-      border-radius: 8px;
-      font-family: monospace;
-      font-size: 14px;
-      z-index: 9999;
-      max-width: 400px;
-      max-height: 600px;
-      overflow-y: auto;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-      border: 1px solid #333;
-    `;
 
     this.runsContainer = document.createElement("div");
     this.container.appendChild(this.runsContainer);
@@ -35,12 +18,7 @@ export class DevModeWidget extends HTMLElement {
     // Add title
     const title = document.createElement("div");
     title.textContent = "Development Mode";
-    title.style.cssText = `
-      font-weight: bold;
-      margin-bottom: 10px;
-      padding-bottom: 5px;
-      border-bottom: 1px solid #333;
-    `;
+    title.className = "dev-mode-widget__title";
     this.container.insertBefore(title, this.runsContainer);
 
     this.loadWorkflowRuns();
@@ -67,7 +45,7 @@ export class DevModeWidget extends HTMLElement {
       this.renderWorkflowRuns(data.workflow_runs);
     } catch (error) {
       console.error("Error loading workflow runs:", error);
-      this.runsContainer.innerHTML = '<div style="color: #ff6b6b;">Error loading workflow runs</div>';
+      this.runsContainer.innerHTML = '<div class="dev-mode-widget__error">Error loading workflow runs</div>';
     }
   }
 
@@ -75,21 +53,14 @@ export class DevModeWidget extends HTMLElement {
     this.runsContainer.innerHTML = "";
 
     if (!runs.length) {
-      this.runsContainer.innerHTML = '<div style="color: #ff6b6b;">No workflow runs found</div>';
+      this.runsContainer.innerHTML = '<div class="dev-mode-widget__error">No workflow runs found</div>';
       return;
     }
 
     runs.forEach(run => {
       const runElement = document.createElement("div");
       runElement.className = "workflow-run";
-      runElement.style.cssText = `
-        margin: 8px 0;
-        padding: 8px;
-        border-radius: 4px;
-        background: ${this.currentRunId === String(run.id) ? "#333" : "#222"};
-        cursor: pointer;
-        transition: background 0.2s;
-      `;
+      runElement.className = `workflow-run${this.currentRunId === String(run.id) ? ' workflow-run--active' : ''}`;
 
       const timestamp = new Date(run.created_at).toLocaleString();
       const inputs = run.inputs || {};
@@ -97,22 +68,32 @@ export class DevModeWidget extends HTMLElement {
       const repo = inputs.repo || "all repos";
       const email = inputs.notification_email || "no email";
 
+      let statusColor = "#63e6be"; // Default green
+      let runDetail = "Processing...";
+
+      if (run.repository) {
+        runDetail = `${run.repository}${run.issueId ? `#${run.issueId}` : ''}`;
+      } else if (run.conclusion === "completed") {
+        runDetail = "No repository found";
+        statusColor = "#ff6b6b"; // Red for error
+      }
+
       runElement.innerHTML = `
-        <div style="margin-bottom: 4px;">
-          <span style="color: #66d9e8;">Run #${run.id}</span>
-          <span style="color: #868e96; font-size: 12px;"> - ${timestamp}</span>
+        <div class="workflow-run__header">
+          <span class="workflow-run__id">Run #${run.id}</span>
+          <span class="workflow-run__timestamp">${timestamp}</span>
         </div>
-        <div style="color: #63e6be; font-size: 12px;">Org: ${organization}</div>
-        <div style="color: #63e6be; font-size: 12px;">Repo: ${repo}</div>
-        <div style="color: #63e6be; font-size: 12px;">Email: ${email}</div>
+        <div class="workflow-run__detail" style="color: ${statusColor}">
+          ${runDetail}
+        </div>
       `;
 
       runElement.addEventListener("mouseover", () => {
-        runElement.style.background = "#2a2a2a";
+        // Hover state is handled by CSS
       });
 
       runElement.addEventListener("mouseout", () => {
-        runElement.style.background = this.currentRunId === String(run.id) ? "#333" : "#222";
+        // Background is handled by CSS classes
       });
 
       runElement.addEventListener("click", () => {

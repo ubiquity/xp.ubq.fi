@@ -29,16 +29,14 @@ export function renderTimeSeriesChart(
     showLegend?: boolean;
   }
 ) {
-  // --- Color Variables ---
-  // Good (attention): cyan (hue 180º)
-  const GOOD = "#00e0ff";
-  // Bad (error): red (hue 0º)
-  const BAD = "#ff2d2d";
-  // Greys
-  const GREY_DARK = "#222";
-  const GREY = "#888";
-  const GREY_LIGHT = "#ccc";
-  const BG = "#181a1b";
+  // Get CSS variables
+  const computedStyle = getComputedStyle(document.documentElement);
+  const GOOD = computedStyle.getPropertyValue('--chart-color-good').trim();
+  const BAD = computedStyle.getPropertyValue('--chart-color-bad').trim();
+  const GREY_DARK = computedStyle.getPropertyValue('--chart-color-grey-dark').trim();
+  const GREY = computedStyle.getPropertyValue('--chart-color-grey').trim();
+  const GREY_LIGHT = computedStyle.getPropertyValue('--chart-color-grey-light').trim();
+  const BG = computedStyle.getPropertyValue('--chart-color-bg').trim();
 
   // --- Config ---
   // SVG namespace

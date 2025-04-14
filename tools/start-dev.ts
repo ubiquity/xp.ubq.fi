@@ -5,13 +5,14 @@ import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { rm } from "node:fs/promises";
 
-// Ensure dist directory exists
+// Set up dist directory and symlinks
+console.log("🔄 Setting up dist directory and symlinks...");
 try {
-  // Use fs/promises instead of Bun.mkdir
-  const { mkdir } = await import("node:fs/promises");
-  await mkdir("dist", { recursive: true });
-} catch {
-  // Directory already exists, ignore
+  await import("./symlink-static.ts");
+  console.log("✅ Symlinks created successfully");
+} catch (err) {
+  console.error("❌ Failed to set up symlinks:", err);
+  process.exit(1);
 }
 
 const mainBuildOptions: BuildOptions = {

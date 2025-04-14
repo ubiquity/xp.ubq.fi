@@ -155,42 +155,63 @@ async function fetchArtifactsListFromGitHub(runId: string) {
 }
 
 // Static file serving helper with improved error handling and content types
-async function serveStaticFile(path: string) {
-  log("STATIC", `Attempting to serve: ${path}`, colors.blue);
+async function serveStaticFile(filePath: string) {
+  log("STATIC", `Attempting to serve: ${filePath}`, colors.blue);
 
+  // For CSS and visualization files, try src directory first
+  if (filePath.startsWith('css/') || filePath.startsWith('visualization/')) {
+    try {
+      const file = await Deno.readFile(`./src/${filePath}`);
+      log("STATIC", `Found in src/${filePath}`, colors.green);
+      return createFileResponse(file, filePath);
+    } catch {
+      log("STATIC", `Not found in src/${filePath}`, colors.yellow);
+    }
+  }
+
+  // Try src directory, then dist/
   try {
-    // For Deno Deploy, files must be in the same directory or imported
-    // We adjust path resolution accordingly
-    const file = await Deno.readFile(`./dist/${path}`);
-
-    const contentType = {
-      '.html': 'text/html',
-      '.css': 'text/css',
-      '.js': 'application/javascript',
-      '.mjs': 'application/javascript',
-      '.json': 'application/json',
-      '.png': 'image/png',
-      '.jpg': 'image/jpeg',
-      '.jpeg': 'image/jpeg',
-      '.svg': 'image/svg+xml',
-      '.ico': 'image/x-icon',
-    }[path.slice(path.lastIndexOf('.'))] || 'application/octet-stream';
-
-    log("STATIC", `Serving ${path} (${file.length} bytes) as ${contentType}`, colors.green);
-
-    return new Response(file, {
-      status: 200,
-      headers: {
-        'content-type': contentType,
-        'content-length': file.length.toString(),
-        'access-control-allow-origin': '*'
-      },
-    });
+    try {
+      const file = await Deno.readFile(`./src/${filePath}`);
+      log("STATIC", `Found in src/: ${filePath}`, colors.green);
+      return createFileResponse(file, filePath);
+    } catch {
+      const file = await Deno.readFile(`./dist/${filePath}`);
+      log("STATIC", `Found in dist/: ${filePath}`, colors.green);
+      return createFileResponse(file, filePath);
+    }
   } catch (err: unknown) {
     const errorMessage = err instanceof Error ? err.message : String(err);
-    log("STATIC", `Error serving ${path}: ${errorMessage}`, colors.red);
+    log("STATIC", `Error serving ${filePath}: ${errorMessage}`, colors.red);
     return null;
   }
+}
+
+function createFileResponse(file: Uint8Array, path: string) {
+
+  const contentType = {
+    '.html': 'text/html',
+    '.css': 'text/css',
+    '.js': 'application/javascript',
+    '.mjs': 'application/javascript',
+    '.json': 'application/json',
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.svg': 'image/svg+xml',
+    '.ico': 'image/x-icon',
+  }[path.slice(path.lastIndexOf('.'))] || 'application/octet-stream';
+
+  log("STATIC", `Serving ${path} (${file.length} bytes) as ${contentType}`, colors.green);
+
+  return new Response(file, {
+    status: 200,
+    headers: {
+      'content-type': contentType,
+      'content-length': file.length.toString(),
+      'access-control-allow-origin': '*'
+    },
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -355,6 +376,28 @@ Deno.serve(async (req: Request) => {
       }
 
       const data = await res.json();
+      // Log the full response data to inspect its structure
+      log("DEBUG", `GitHub Workflow Runs Response: ${JSON.stringify(data, null, 2)}`, colors.yellow);
+
+      // Fetch and log the full details for the first run to inspect the structure
+      if (data.workflow_runs && data.workflow_runs.length > 0) {
+        const firstRunId = data.workflow_runs[0].id;
+        const runDetailsUrl = `https://api.github.com/repos/${ORG}/${REPO}/actions/runs/${firstRunId}`;
+        log("DEBUG", `Fetching run details: ${runDetailsUrl}`, colors.yellow);
+        const runDetailsRes = await fetch(runDetailsUrl, {
+          headers: {
+            Accept: "application/vnd.github.v3+json",
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        if (runDetailsRes.ok) {
+          const runDetails = await runDetailsRes.json();
+          log("DEBUG", `First run details: ${JSON.stringify(runDetails, null, 2)}`, colors.yellow);
+        } else {
+          log("DEBUG", `Failed to fetch run details: ${runDetailsRes.status} ${runDetailsRes.statusText}`, colors.red);
+        }
+      }
+
       endTimer("workflowRuns", "Workflow runs fetch completed");
       endTimer("request", "Request completed");
       return jsonResponse(data);
