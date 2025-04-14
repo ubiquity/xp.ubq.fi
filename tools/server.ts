@@ -189,22 +189,46 @@ const server = Bun.serve({
       try {
         startTimer("workflowRuns");
         const token = await getInstallationToken();
-        const url = `https://api.github.com/repos/${ORG}/${REPO}/actions/runs?event=workflow_dispatch&branch=chore/run-all&per_page=10`;
+        const runsUrl = `https://api.github.com/repos/${ORG}/${REPO}/actions/runs?event=workflow_dispatch&branch=chore/run-all&per_page=10`;
+        log("API", `Fetching workflow runs: ${runsUrl}`, colors.blue);
 
-        log("API", `Fetching workflow runs: ${url}`, colors.blue);
-
-        const response = await fetch(url, {
+        const runsResponse = await fetch(runsUrl, {
           headers: {
             Accept: "application/vnd.github.v3+json",
             Authorization: `Bearer ${token}`,
           },
         });
 
-        if (!response.ok) {
-          throw new Error(`GitHub API error: ${response.status} ${response.statusText}`);
+        if (!runsResponse.ok) {
+          throw new Error(`GitHub API error: ${runsResponse.status} ${runsResponse.statusText}`);
         }
 
-        const data = await response.json();
+        const runsData = await runsResponse.json();
+
+        // Fetch workflow run inputs for each run
+        const runs = await Promise.all(
+          runsData.workflow_runs.map(async (run: any) => {
+            const inputsUrl = `https://api.github.com/repos/${ORG}/${REPO}/actions/runs/${run.id}/inputs`;
+            log("API", `Fetching inputs for run ${run.id}`, colors.blue);
+
+            const inputsResponse = await fetch(inputsUrl, {
+              headers: {
+                Accept: "application/vnd.github.v3+json",
+                Authorization: `Bearer ${token}`,
+              },
+            });
+
+            if (!inputsResponse.ok) {
+              log("ERROR", `Failed to fetch inputs for run ${run.id}`, colors.red);
+              return run;
+            }
+
+            const inputsData = await inputsResponse.json();
+            return { ...run, inputs: inputsData };
+          })
+        );
+
+        const data = { ...runsData, workflow_runs: runs };
         endTimer("workflowRuns", "Workflow runs fetch completed");
         return jsonResponse(data);
       } catch (error) {

@@ -3,10 +3,24 @@
  * Handles downloading, unzipping, and storing in IndexedDB.
  */
 
-import { saveArtifact } from "../db/save-artifact";
-// Import the new download function and the new transformation function
+import type { AggregatedResultEntry } from "../data-transform";
 import { transformAggregatedToOrgRepoData } from "../data-transform";
+import { saveArtifact } from "../db/save-artifact";
 import { downloadAndProcessAggregatedArtifact } from "../download-artifacts";
+
+function isValidAggregatedResult(data: unknown): data is AggregatedResultEntry[] {
+  if (!Array.isArray(data)) return false;
+
+  return data.every(entry =>
+    typeof entry === 'object' &&
+    entry !== null &&
+    typeof (entry as any).org === 'string' &&
+    typeof (entry as any).repo === 'string' &&
+    typeof (entry as any).issueId === 'string' &&
+    typeof (entry as any).metadata === 'object' &&
+    (entry as any).metadata !== null
+  );
+}
 
 // Type definitions for messages
 type WorkerMessage = {
@@ -14,22 +28,21 @@ type WorkerMessage = {
   runId: string;
 };
 
-type ProgressMessage = {
-  type: "progress";
-  phase: string;
-  percent: number;
-  detail?: string;
-};
-
-type ErrorMessage = {
-  type: "error";
-  message: string;
-};
-
-type CompleteMessage = {
-  type: "complete";
-  data: any;
-};
+type WorkerResponse =
+  | {
+      type: "progress";
+      phase: string;
+      percent: number;
+      detail: string;
+    }
+  | {
+      type: "error";
+      message: string;
+    }
+  | {
+      type: "complete";
+      data: Record<string, unknown>;
+    };
 
 // Handle incoming messages
 self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
@@ -39,52 +52,30 @@ self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
       console.log("Worker: Starting artifact processing for runId", runId);
 
       // Call the new function to download and parse the single aggregated artifact
-      const parsedJsonArray = await downloadAndProcessAggregatedArtifact(
-        (phase, percent, detail) => {
-          // Report progress back to main thread
-          const progress: ProgressMessage = {
-            type: "progress",
-            phase,
-            percent,
-            detail,
-          };
-          self.postMessage(progress);
-        },
-        (error) => {
-          // Report errors back to main thread
-          const errorMsg: ErrorMessage = {
-            type: "error",
-            message: error.message,
-          };
-          self.postMessage(errorMsg);
-        },
-        runId // Pass runId directly
+      const parsedJson = await downloadAndProcessAggregatedArtifact(
+        (phase, percent, detail) => self.postMessage({ type: "progress", phase, percent, detail }),
+        (error) => self.postMessage({ type: "error", message: error.message }),
+        runId
       );
 
-      // Transform the parsed array into the nested OrgRepoData structure
-      console.log("Worker: Transforming aggregated data...");
-      const transformedData = transformAggregatedToOrgRepoData(parsedJsonArray, runId);
+      if (!isValidAggregatedResult(parsedJson)) {
+        throw new Error("Invalid data structure from artifact");
+      }
 
-      // Store transformed data in IndexedDB
-      console.log("Worker: Storing transformed data in IndexedDB...");
-      // Only save the data under the runId key
-      const dataToStore = transformedData[runId] ?? {};
-      await saveArtifact(runId, new Blob([JSON.stringify(dataToStore)]));
-      console.log("Worker: Transformed data saved to IndexedDB");
+      const transformedData = transformAggregatedToOrgRepoData(parsedJson, runId);
 
-      console.log("Worker: Processing complete, sending transformed data");
-      const complete: CompleteMessage = {
-        type: "complete",
-        data: transformedData, // Send the full transformed object back
-      };
-      self.postMessage(complete);
+      if (!transformedData[runId]) {
+        throw new Error("Failed to transform data: no data for runId");
+      }
+
+      await saveArtifact(runId, new Blob([JSON.stringify(transformedData[runId])]));
+      self.postMessage({ type: "complete", data: transformedData });
 
     } catch (error) {
-      const errorMsg: ErrorMessage = {
+      self.postMessage({
         type: "error",
-        message: error instanceof Error ? error.message : String(error)
-      };
-      self.postMessage(errorMsg);
+        message: error instanceof Error ? error.message : "Unknown error during processing"
+      });
     }
   }
 };

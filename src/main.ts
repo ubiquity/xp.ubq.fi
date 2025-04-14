@@ -1,6 +1,5 @@
-import { createDevWidget, updateRunsList } from "./components/dev-mode-widget";
+import { DevModeWidget } from "./components/dev-mode-widget";
 import type { LeaderboardEntry, TimeSeriesEntry } from "./data-transform";
-import { fetchLatestWorkflowRuns } from "./github-actions";
 import { getRunIdFromQuery, isProduction } from "./utils";
 import { renderLeaderboardChart } from "./visualization/leaderboard-chart";
 import { renderTimeSeriesChart } from "./visualization/time-series-chart";
@@ -30,26 +29,13 @@ const progressText = document.createElement("div");
 progressText.style.marginTop = "16px";
 loadingOverlay.appendChild(progressText);
 
-async function initDevMode() {
-  const { widget, runsList, style } = createDevWidget();
-  document.body.appendChild(style);
-  document.body.appendChild(widget);
-
-  try {
-    const runs = await fetchLatestWorkflowRuns();
-    const currentRunId = getRunIdFromQuery();
-    updateRunsList(runsList, runs, currentRunId);
-  } catch (error) {
-    console.error("Failed to load workflow runs:", error);
-  }
-}
-
 async function init() {
-  if (!isProduction()) {
-    await initDevMode();
-  }
-
   try {
+    // Initialize dev mode widget
+    if (!isProduction()) {
+      document.body.appendChild(new DevModeWidget());
+    }
+
     const runId = getRunIdFromQuery();
     if (!runId) {
       if (!isProduction()) {

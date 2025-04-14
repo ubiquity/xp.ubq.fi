@@ -18,7 +18,7 @@ function isValidZip(data: Uint8Array): boolean {
  * @returns The parsed JSON content (expected to be an array).
  * @throws {Error} When ZIP is invalid, aggregated_results.json is not found, or parsing fails.
  */
-export async function unzipArtifact(zipData: Uint8Array): Promise<any[]> { // Mark as async
+export async function unzipArtifact(zipData: Uint8Array): Promise<unknown[]> {
   if (!isValidZip(zipData)) {
     throw new Error('Invalid ZIP file format: Corrupted or not a ZIP file');
   }
@@ -31,25 +31,13 @@ export async function unzipArtifact(zipData: Uint8Array): Promise<any[]> { // Ma
     const unzipped = unzipSync(zipData);
     console.log("Unzipped files:", Object.keys(unzipped)); // Log filenames
 
-    // Find the aggregated_results.json file (case-insensitive check just in case)
-    let aggregatedData: Uint8Array | undefined;
-    let foundFilename = '';
-    for (const filename in unzipped) {
-      if (filename.toLowerCase().endsWith(AGGREGATED_JSON_FILENAME)) {
-         // Handle potential directory prefix if GitHub adds one
-         if (filename === AGGREGATED_JSON_FILENAME || filename.split('/').pop() === AGGREGATED_JSON_FILENAME) {
-            aggregatedData = unzipped[filename];
-            foundFilename = filename;
-            break;
-         }
-      }
-    }
-
+    // Look for exact match only
+    const aggregatedData = unzipped[AGGREGATED_JSON_FILENAME];
     if (!aggregatedData) {
-      throw new Error(`${AGGREGATED_JSON_FILENAME} not found in the ZIP archive. Found: ${Object.keys(unzipped).join(', ')}`);
+      throw new Error(`${AGGREGATED_JSON_FILENAME} not found in ZIP archive. Files found: ${Object.keys(unzipped).join(', ')}`);
     }
 
-    console.log(`Found ${foundFilename}, size: ${aggregatedData.length}`);
+    console.log(`Found ${AGGREGATED_JSON_FILENAME}, size: ${aggregatedData.length}`);
 
     // Decode the Uint8Array to a string
     console.log("Decoding Uint8Array to string...");
@@ -62,9 +50,7 @@ export async function unzipArtifact(zipData: Uint8Array): Promise<any[]> { // Ma
     console.log("JSON parsing complete.");
 
     if (!Array.isArray(parsedJson)) {
-        console.warn("Parsed JSON is not an array, returning as is.");
-        // Depending on requirements, might want to throw an error or wrap in array
-        return parsedJson; // Or throw new Error("Expected aggregated_results.json to contain an array");
+      throw new Error("Expected aggregated_results.json to contain an array");
     }
 
     return parsedJson;

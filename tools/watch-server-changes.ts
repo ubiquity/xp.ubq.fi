@@ -1,28 +1,21 @@
+import { globSync } from "glob";
 import { watch } from "node:fs";
 
 console.log("Starting server file watcher...");
 
-// Files and directories to watch for server changes
-const watchPaths = [
-  "tools/server.ts",
-  "deno/artifact-proxy.ts",
-  "src/db",
-  "src/download-artifact.ts",
-  "src/download-artifacts.ts",
-  "src/fetch-artifacts-list.ts",
-  "src/unzip-artifact.ts",
-  "tools/local-auth.ts",
-  "src/utils.ts",
-  "wasm/src"
-];
+// Find all TypeScript files in the project
+const watchPaths = globSync("**/*.ts", {
+  ignore: ["**/node_modules/**", "**/dist/**", "**/build/**"],
+});
 
-// Set up watchers for each path
-watchPaths.forEach(path => {
-  console.log(`Watching: ${path}`);
+console.log("Watching TypeScript files:");
+watchPaths.forEach((path: string) => console.log(`  ${path}`));
 
-  watch(path, { recursive: true }, () => {
+// Set up a single watcher for the project directory
+watch(".", { recursive: true }, (_: unknown, filename: string | null) => {
+  if (filename && filename.endsWith(".ts")) {
     console.log("SERVER_CHANGE_DETECTED");
-  });
+  }
 });
 
 // Keep the process alive

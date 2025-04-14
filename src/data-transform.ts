@@ -18,15 +18,17 @@
 export type ContributorAnalytics = {
   userId: number;
   total: number;
-  task?: { reward: number; multiplier: number };
-  // Ensure comments array elements have expected structure for time series
-  comments?: Array<{
-    id?: number | string;
-    timestamp?: string; // Expecting ISO 8601 string
-    score?: { reward?: number };
-    // other comment properties...
+  task: {
+    reward: number;
+    multiplier: number;
+    timestamp: string; // Required ISO 8601 string
+  } | null;
+  comments: Array<{
+    id: number;
+    timestamp: string; // Required ISO 8601 string
+    score: { reward: number };
   }>;
-  evaluationCommentHtml?: string;
+  evaluationCommentHtml: string | null;
 };
 
 export type LeaderboardEntry = {
@@ -53,7 +55,7 @@ export type TimeSeriesEntry = {
  * Aggregates leaderboard data from nested artifact analytics.
  * Returns an array of contributors with total XP and per-repo breakdown.
  */
-type OrgRepoData = {
+export type OrgRepoData = {
   [org: string]: {
     [repo: string]: {
       [issue: string]: { // Key is issue number as string
@@ -85,22 +87,30 @@ export function getLeaderboardData(
         const issueData = repoData[issueOrPr];
         for (const contributor in issueData) {
           const analytics: ContributorAnalytics = issueData[contributor];
-          // Ensure analytics object and userId exist before processing
-          if (analytics && typeof analytics.userId === 'number') {
-            if (!leaderboard.has(contributor)) {
-              leaderboard.set(contributor, {
-                contributor,
-                userId: analytics.userId,
-                totalXP: 0,
-                repoBreakdown: {},
-              });
-            }
-            const entry = leaderboard.get(contributor)!;
-            entry.totalXP += analytics.total || 0;
-            entry.repoBreakdown[repo] = (entry.repoBreakdown[repo] || 0) + (analytics.total || 0);
-          } else {
-            console.warn(`Skipping leaderboard entry for ${contributor} in issue ${issueOrPr} due to missing data.`);
+          if (!analytics) {
+            throw new Error(`Missing analytics data for contributor "${contributor}" in issue "${issueOrPr}"`);
           }
+
+          if (typeof analytics.userId !== 'number') {
+            throw new Error(`Invalid userId for contributor "${contributor}" in issue "${issueOrPr}"`);
+          }
+
+          if (typeof analytics.total !== 'number') {
+            throw new Error(`Invalid total for contributor "${contributor}" in issue "${issueOrPr}"`);
+          }
+
+          if (!leaderboard.has(contributor)) {
+            leaderboard.set(contributor, {
+              contributor,
+              userId: analytics.userId,
+              totalXP: 0,
+              repoBreakdown: {},
+            });
+          }
+
+          const entry = leaderboard.get(contributor)!;
+          entry.totalXP += analytics.total;
+          entry.repoBreakdown[repo] = (entry.repoBreakdown[repo] || 0) + analytics.total;
         }
       }
     }
@@ -133,23 +143,33 @@ export function transformAggregatedToOrgRepoData(
 ): OrgRepoData {
   const transformed: OrgRepoData = { [runId]: {} };
 
+  if (!Array.isArray(aggregatedData)) {
+    throw new Error("aggregatedData must be an array");
+  }
+
   for (const entry of aggregatedData) {
-    // Basic validation of entry structure
-    if (!entry || typeof entry !== 'object' || !entry.repo || !entry.issueId || !entry.metadata) {
-        console.warn("Skipping invalid entry in aggregatedData:", entry);
-        continue;
+    // Strict validation of entry structure
+    if (!entry || typeof entry !== 'object') {
+      throw new Error("Invalid entry: must be an object");
     }
+
     const { repo, issueId, metadata } = entry;
 
-    // Ensure org level exists (should always be runId)
-    if (!transformed[runId]) {
-      transformed[runId] = {};
+    if (!repo || typeof repo !== 'string') {
+      throw new Error("Missing or invalid repo name");
     }
-    // Ensure repo level exists
-    if (!transformed[runId][repo]) {
-      transformed[runId][repo] = {};
+
+    if (!issueId || typeof issueId !== 'string') {
+      throw new Error("Missing or invalid issueId");
     }
-    // Assign metadata directly under the issueId
+
+    if (!metadata || typeof metadata !== 'object') {
+      throw new Error("Missing or invalid metadata");
+    }
+
+    // Initialize nested structure
+    transformed[runId] = transformed[runId] || {};
+    transformed[runId][repo] = transformed[runId][repo] || {};
     transformed[runId][repo][issueId] = metadata;
   }
 
@@ -180,25 +200,22 @@ export function getTimeSeriesData(
   data: OrgRepoData
 ): TimeSeriesEntry[] {
   const seriesMap: Map<string, TimeSeriesEntry> = new Map();
-  const errorLog: { class: string; message: string; context: any }[] = [];
 
   for (const org in data) {
     const orgData = data[org];
     for (const repo in orgData) {
       const repoData = orgData[repo];
-      for (const issueOrPr in repoData) { // issueOrPr is the issue number string
+      for (const issueOrPr in repoData) {
         const issueData = repoData[issueOrPr];
         for (const contributor in issueData) {
           const analytics: ContributorAnalytics = issueData[contributor];
 
-          // Strict validation: userId must be present
-          if (!analytics || typeof analytics.userId !== 'number') {
-            errorLog.push({
-              class: "missing_userId",
-              message: `Contributor analytics missing userId for contributor "${contributor}", issue "${issueOrPr}", repo "${repo}".`,
-              context: { contributor, issueOrPr, repo }
-            });
-            continue;
+          if (!analytics) {
+            throw new Error(`Missing analytics data for contributor "${contributor}" in issue "${issueOrPr}"`);
+          }
+
+          if (typeof analytics.userId !== 'number') {
+            throw new Error(`Missing or invalid userId for contributor "${contributor}" in issue "${issueOrPr}"`);
           }
 
           if (!seriesMap.has(contributor)) {
@@ -210,82 +227,39 @@ export function getTimeSeriesData(
           }
           const entry = seriesMap.get(contributor)!;
 
-          // Strict validation for task event (if present)
-          if (analytics.task && analytics.task.reward) {
-            if (!('timestamp' in analytics.task) || typeof (analytics.task as any).timestamp !== 'string' || !(analytics.task as any).timestamp) {
-              errorLog.push({
-                class: "missing_task_timestamp",
-                message: `Task reward is missing a timestamp value for contributor "${contributor}", issue "${issueOrPr}", repo "${repo}".`,
-                context: { contributor, issueOrPr, repo }
-              });
-            } else {
-              const taskTimestamp = (analytics.task as any).timestamp;
-              if (isNaN(new Date(taskTimestamp).getTime())) {
-                errorLog.push({
-                  class: "invalid_task_timestamp",
-                  message: `Task reward has invalid timestamp format "${taskTimestamp}" for contributor "${contributor}", issue "${issueOrPr}", repo "${repo}".`,
-                  context: { contributor, issueOrPr, repo, taskTimestamp }
-                });
-              } else {
-                entry.series.push({
-                  time: taskTimestamp,
-                  xp: analytics.task.reward,
-                  repo,
-                  issueOrPr,
-                });
-              }
+          // Handle task event
+          if (analytics.task !== null) {
+            const { timestamp, reward } = analytics.task;
+            if (!timestamp || isNaN(new Date(timestamp).getTime())) {
+              throw new Error(`Invalid task timestamp for contributor "${contributor}" in issue "${issueOrPr}"`);
             }
+
+            entry.series.push({
+              time: timestamp,
+              xp: reward,
+              repo,
+              issueOrPr,
+            });
           }
 
-          // Strict validation for comment XP events
-          if (Array.isArray(analytics.comments)) {
-            analytics.comments.forEach((comment) => {
-              if (!comment || typeof comment.timestamp !== 'string' || !comment.timestamp) {
-                errorLog.push({
-                  class: "missing_comment_timestamp",
-                  message: `Comment event is missing a timestamp value for contributor "${contributor}", issue "${issueOrPr}", comment ID "${comment?.id}", repo "${repo}".`,
-                  context: { contributor, issueOrPr, repo, commentId: comment?.id }
-                });
-                return;
-              }
-              if (isNaN(new Date(comment.timestamp).getTime())) {
-                errorLog.push({
-                  class: "invalid_comment_timestamp",
-                  message: `Comment event has invalid timestamp format "${comment.timestamp}" for contributor "${contributor}", issue "${issueOrPr}", comment ID "${comment.id}", repo "${repo}".`,
-                  context: { contributor, issueOrPr, repo, commentId: comment.id, timestamp: comment.timestamp }
-                });
-                return;
-              }
-              if (typeof comment.score?.reward !== 'number') {
-                errorLog.push({
-                  class: "missing_comment_reward",
-                  message: `Comment event is missing a numeric reward for contributor "${contributor}", issue "${issueOrPr}", comment ID "${comment.id}", repo "${repo}".`,
-                  context: { contributor, issueOrPr, repo, commentId: comment.id }
-                });
-                return;
-              }
-              entry.series.push({
-                time: comment.timestamp,
-                xp: comment.score.reward,
-                repo,
-                issueOrPr,
-              });
+          // Handle comment events
+          for (const comment of analytics.comments) {
+            const { timestamp, score, id } = comment;
+
+            if (!timestamp || isNaN(new Date(timestamp).getTime())) {
+              throw new Error(`Invalid comment timestamp for comment ${id} from contributor "${contributor}" in issue "${issueOrPr}"`);
+            }
+
+            entry.series.push({
+              time: timestamp,
+              xp: score.reward,
+              repo,
+              issueOrPr,
             });
           }
         }
       }
     }
-  }
-
-  // If any errors were collected, throw a summary error
-  if (errorLog.length > 0) {
-    // Group by class and count
-    const classCounts: Record<string, number> = {};
-    errorLog.forEach(e => { classCounts[e.class] = (classCounts[e.class] || 0) + 1; });
-    const uniqueClasses = Object.keys(classCounts).map(cls => `${cls}: ${classCounts[cls]}`).join(", ");
-    const errorSummary = `Data validation failed. Unique error classes: ${uniqueClasses}\nFirst 5 errors:\n` +
-      errorLog.slice(0, 5).map(e => `- [${e.class}] ${e.message}`).join("\n");
-    throw new Error(errorSummary);
   }
 
   // Sort each contributor's series by actual timestamp

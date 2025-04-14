@@ -1,87 +1,127 @@
-import type { WorkflowRun } from "../github-actions";
+import { isProduction } from "../utils";
 
-interface DevWidgetElements {
-  widget: HTMLDivElement;
-  title: HTMLDivElement;
-  runsList: HTMLDivElement;
-  style: HTMLStyleElement;
-}
+export class DevModeWidget extends HTMLElement {
+  private container!: HTMLDivElement;
+  private runsContainer!: HTMLDivElement;
+  private currentRunId: string | null = null;
 
-export function createDevWidget(): DevWidgetElements {
-  const widget = document.createElement("div");
-  widget.className = "dev-mode-widget";
+  constructor() {
+    super();
+    if (isProduction()) return;
 
-  const title = document.createElement("div");
-  title.textContent = "Development Mode";
-  title.className = "dev-mode-title";
-
-  const runsList = document.createElement("div");
-  runsList.className = "runs-list";
-
-  const style = document.createElement("style");
-  style.textContent = `
-    .dev-mode-widget {
+    this.container = document.createElement("div");
+    this.container.className = "dev-mode-widget";
+    this.container.style.cssText = `
       position: fixed;
-      bottom: 16px;
-      right: 16px;
-      background: rgba(24, 26, 27, 0.9);
-      border: 1px solid #00e0ff;
-      color: #00e0ff;
-      padding: 12px;
-      border-radius: 4px;
-      z-index: 1000;
-      min-width: 200px;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    }
-
-    .dev-mode-title {
+      bottom: 20px;
+      right: 20px;
+      background: #1a1a1a;
+      color: #fff;
+      padding: 15px;
+      border-radius: 8px;
+      font-family: monospace;
       font-size: 14px;
-      font-weight: bold;
-      margin-bottom: 8px;
-      padding-bottom: 8px;
-      border-bottom: 1px solid rgba(0,224,255,0.3);
-    }
-
-    .runs-list {
-      max-height: 300px;
+      z-index: 9999;
+      max-width: 400px;
+      max-height: 600px;
       overflow-y: auto;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      border: 1px solid #333;
+    `;
+
+    this.runsContainer = document.createElement("div");
+    this.container.appendChild(this.runsContainer);
+
+    // Add title
+    const title = document.createElement("div");
+    title.textContent = "Development Mode";
+    title.style.cssText = `
+      font-weight: bold;
+      margin-bottom: 10px;
+      padding-bottom: 5px;
+      border-bottom: 1px solid #333;
+    `;
+    this.container.insertBefore(title, this.runsContainer);
+
+    this.loadWorkflowRuns();
+  }
+
+  connectedCallback() {
+    if (!isProduction()) {
+      document.body.appendChild(this.container);
+    }
+  }
+
+  disconnectedCallback() {
+    if (!isProduction() && this.container.parentNode) {
+      this.container.parentNode.removeChild(this.container);
+    }
+  }
+
+  private async loadWorkflowRuns() {
+    try {
+      const response = await fetch("/api/workflow-runs");
+      if (!response.ok) throw new Error("Failed to fetch workflow runs");
+
+      const data = await response.json();
+      this.renderWorkflowRuns(data.workflow_runs);
+    } catch (error) {
+      console.error("Error loading workflow runs:", error);
+      this.runsContainer.innerHTML = '<div style="color: #ff6b6b;">Error loading workflow runs</div>';
+    }
+  }
+
+  private renderWorkflowRuns(runs: any[]) {
+    this.runsContainer.innerHTML = "";
+
+    if (!runs.length) {
+      this.runsContainer.innerHTML = '<div style="color: #ff6b6b;">No workflow runs found</div>';
+      return;
     }
 
-    .run-item {
-      cursor: pointer;
-      padding: 8px;
-      font-size: 12px;
-      border-bottom: 1px solid rgba(0,224,255,0.1);
-      transition: background-color 0.2s ease;
-    }
+    runs.forEach(run => {
+      const runElement = document.createElement("div");
+      runElement.className = "workflow-run";
+      runElement.style.cssText = `
+        margin: 8px 0;
+        padding: 8px;
+        border-radius: 4px;
+        background: ${this.currentRunId === String(run.id) ? "#333" : "#222"};
+        cursor: pointer;
+        transition: background 0.2s;
+      `;
 
-    .run-item:hover {
-      background: rgba(0,224,255,0.1);
-    }
+      const timestamp = new Date(run.created_at).toLocaleString();
+      const inputs = run.inputs || {};
+      const organization = inputs.organization || "ubiquity orgs";
+      const repo = inputs.repo || "all repos";
+      const email = inputs.notification_email || "no email";
 
-    .run-item.active {
-      background: rgba(0,224,255,0.2);
-    }
-  `;
+      runElement.innerHTML = `
+        <div style="margin-bottom: 4px;">
+          <span style="color: #66d9e8;">Run #${run.id}</span>
+          <span style="color: #868e96; font-size: 12px;"> - ${timestamp}</span>
+        </div>
+        <div style="color: #63e6be; font-size: 12px;">Org: ${organization}</div>
+        <div style="color: #63e6be; font-size: 12px;">Repo: ${repo}</div>
+        <div style="color: #63e6be; font-size: 12px;">Email: ${email}</div>
+      `;
 
-  widget.appendChild(title);
-  widget.appendChild(runsList);
+      runElement.addEventListener("mouseover", () => {
+        runElement.style.background = "#2a2a2a";
+      });
 
-  return { widget, title, runsList, style };
+      runElement.addEventListener("mouseout", () => {
+        runElement.style.background = this.currentRunId === String(run.id) ? "#333" : "#222";
+      });
+
+      runElement.addEventListener("click", () => {
+        window.location.href = `/?run=${run.id}`;
+      });
+
+      this.runsContainer.appendChild(runElement);
+    });
+  }
 }
 
-export function updateRunsList(runsList: HTMLDivElement, runs: WorkflowRun[], currentRunId: string | null) {
-  runsList.innerHTML = "";
-
-  runs.forEach(run => {
-    const runItem = document.createElement("div");
-    runItem.className = `run-item${currentRunId && run.id.toString() === currentRunId ? " active" : ""}`;
-    runItem.textContent = run.display_title;
-    runItem.onclick = () => {
-      const url = new URL(window.location.href);
-      url.searchParams.set("run", run.id.toString());
-      window.location.href = url.toString();
-    };
-    runsList.appendChild(runItem);
-  });
-}
+customElements.define("dev-mode-widget", DevModeWidget);
