@@ -1,4 +1,4 @@
-/**
+ /**
  * Leaderboard Chart Renderer (SVG)
  * - Horizontal stacked bar chart for contributor XP.
  * - Uses two complementary colors (good: cyan, bad: red) with shades for visual hierarchy.
@@ -113,6 +113,23 @@ export function renderLeaderboardChart(
   // Clear container and append SVG
   container.innerHTML = "";
   container.appendChild(svg);
+
+  // --- Draw Vertical Grid Lines ---
+  const numGridSegments = 4; // Match the 4 segments used for X-axis ticks
+  const gridChartWidth = width - leftMargin - rightMargin;
+  for (let i = 0; i <= numGridSegments; i++) {
+      const x = leftMargin + (i / numGridSegments) * gridChartWidth;
+      const line = document.createElementNS(svgNS, "line");
+      line.setAttribute("x1", x.toString());
+      line.setAttribute("x2", x.toString());
+      line.setAttribute("y1", topMargin.toString()); // Span from top margin
+      line.setAttribute("y2", (height - bottomMargin).toString()); // To bottom margin
+      line.setAttribute("stroke", GREY_DARK); // Use same color as timeline grid
+      line.setAttribute("stroke-width", "1");
+      // Optional: Add dashed style for grid lines if desired
+      // line.setAttribute("stroke-dasharray", "4 4");
+      svg.appendChild(line);
+  }
 
   // Create tooltip div
   const tooltip = document.createElement("div");
@@ -321,54 +338,5 @@ export function renderLeaderboardChart(
           tickLabel.textContent = Math.round(tickValue).toString();
       }
       svg.appendChild(tickLabel);
-  }
-
-
-  // Legend (repo patterns)
-  // Responsive legend layout
-  // Create a simplified legend container
-  const legendContainer = document.createElement("div");
-  legendContainer.style.position = "absolute";
-  legendContainer.style.left = `${leftMargin}px`;
-  legendContainer.style.bottom = `${bottomMargin - 32}px`; // Position above the bottom margin
-  legendContainer.style.width = `${width - leftMargin - rightMargin}px`;
-  legendContainer.style.height = "40px";
-  legendContainer.style.backgroundColor = BG;
-  container.appendChild(legendContainer);
-
-  // Add a single legend item with gradient
-  const legendItem = document.createElement("div");
-  legendItem.style.display = "inline-block";
-  legendItem.style.marginRight = "16px";
-
-  const gradientBox = document.createElement("div");
-  gradientBox.style.display = "inline-block";
-  gradientBox.style.width = "80px";
-  gradientBox.style.height = "16px";
-  gradientBox.style.background = `linear-gradient(to right, ${GOOD}00, ${GOOD})`;
-  gradientBox.style.verticalAlign = "middle";
-
-  const legendLabel = document.createElement("span");
-  legendLabel.style.marginLeft = "8px";
-  legendLabel.style.color = GREY;
-  legendLabel.style.fontSize = "12px";
-  legendLabel.style.verticalAlign = "middle";
-  legendLabel.textContent = "Issue XP Distribution";
-
-  legendItem.appendChild(gradientBox);
-  legendItem.appendChild(legendLabel);
-  legendContainer.appendChild(legendItem);
-
-  // Add error legend if needed
-  if (errorContributors.length > 0) {
-    const errorItem = document.createElement("div");
-    errorItem.style.display = "inline-block";
-    errorItem.style.marginLeft = "24px";
-    errorItem.style.marginRight = "16px";
-    errorItem.innerHTML = `
-      <div style="display: inline-block; width: 24px; height: 16px; background: ${BAD}; opacity: 0.85; vertical-align: middle;"></div>
-      <span style="margin-left: 8px; color: ${BAD}; font-size: 12px; vertical-align: middle;">Error/Flagged</span>
-    `;
-    legendContainer.appendChild(errorItem);
   }
 }
