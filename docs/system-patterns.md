@@ -4,30 +4,26 @@
 - **Frontend:** Plain HTML, CSS, and TypeScript.
 - **Bundling:** esbuild, invoked via Bun scripts.
 - **Package Management & Scripting:** Bun.
-- **Artifact Handling:** Downloads and unzips GitHub artifacts directly in browser.
-- **WASM Integration:** Rust code compiled to WASM for unzipping artifacts.
-- **Backend:** Deno Deploy acting strictly as auth proxy due to compute limitations (50ms).
+- **Artifact Handling:** Downloads the single `final-aggregated-results.zip` artifact from GitHub and unzips it directly in the browser using JavaScript (`fflate`).
+- **Backend:** Deno Deploy acting strictly as auth proxy for GitHub API calls (artifact list/metadata). Direct artifact downloads use GitHub URLs.
 
 ## Key Components
 - `src/main.ts`: App entry point.
-- `src/download-artifact.ts`: Fetches individual artifact data.
-- `src/download-artifacts.ts`: Orchestrates downloading and saving multiple artifacts.
-- `src/db/`: IndexedDB setup and access.
+- `src/download-artifacts.ts`: Fetches metadata for, downloads, and orchestrates processing of the single `final-aggregated-results.zip` artifact.
+- `src/unzip-artifact.ts`: Unzips the artifact ZIP using `fflate` and extracts/parses `aggregated_results.json`.
+- `src/data-transform.ts`: Transforms the parsed artifact data into the nested format required for analytics.
+- `src/db/`: IndexedDB setup and access for caching transformed data.
 - `tools/`: Build, watch, and server scripts (for main app).
-- `wasm/`: Contains all WASM-related code:
-  - `wasm/wasm-unzipper/`: Rust source for the unzipper WASM module.
-  - `wasm/src/`: TypeScript wrappers and helpers for WASM integration.
-  - `wasm/tools/`: Build tools specific to WASM components.
-  - `wasm/tests/`: Tests for WASM components.
 
 ## Artifact Download & Storage Flow
-1. Frontend authenticates through Deno Deploy proxy.
-2. Frontend fetches list of artifacts from GitHub.
-3. For each artifact:
-   - Download ZIP through auth proxy.
-   - Use WASM to unzip in browser.
-   - Store processed data in IndexedDB.
-4. Provide feedback in console/UI.
+1. Frontend determines the target GitHub Actions `runId`.
+2. Frontend fetches metadata for the `final-aggregated-results` artifact for that run via GitHub API (using auth proxy if needed).
+3. Frontend downloads the artifact ZIP directly from GitHub's `archive_download_url` (requires auth header).
+4. Use JavaScript (`fflate`) to unzip the downloaded data in the browser/worker.
+5. Extract and parse the `aggregated_results.json` file content.
+6. Transform the parsed array data into the nested `OrgRepoData` structure.
+7. Store the transformed data in IndexedDB, keyed by `runId`.
+8. Provide feedback in console/UI.
 
 ## Design Patterns
 - **Separation of concerns:** Download logic, storage logic, and UI kept modular.

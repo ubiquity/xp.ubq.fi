@@ -2,38 +2,33 @@
 
 ## Recent Changes
 - Major architectural change: shifted artifact unzipping to client-side due to Deno Deploy's 50ms compute limit.
-- Backend now acts solely as an auth proxy for GitHub artifacts.
-- Frontend handles direct artifact ZIP downloads and processing.
-- WASM unzipper component now critical for browser-side artifact processing.
+- Backend now acts solely as an auth proxy for GitHub API calls.
+- Frontend handles direct artifact ZIP downloads (`final-aggregated-results.zip`) and processing.
+- Switched from WASM to JavaScript (`fflate`) for browser-side artifact unzipping.
+- Implemented data transformation for the new aggregated artifact format.
 - Updated documentation to reflect new architecture and responsibilities.
 
 ## Current Focus
 - Maintain minimal framework-free frontend with enhanced client-side capabilities.
-- Optimize WASM unzipper for efficient browser-side processing.
+- Ensure performant JS-based unzipping and JSON parsing, especially for large artifacts.
 - Keep auth proxy lightweight within Deno Deploy constraints.
-- Ensure robust error handling for ZIP processing.
-- Support direct GitHub artifact integration.
-- Maintain efficient IndexedDB storage patterns.
-- Implement developer performance analytics visualizations (leaderboard, time series) with IndexedDB-backed instant data loading.
+- Ensure robust error handling for the entire artifact download/unzip/parse/transform pipeline.
+- Support direct GitHub artifact integration using `archive_download_url`.
+- Maintain efficient IndexedDB storage patterns for transformed data.
+- Implement developer performance analytics visualizations (leaderboard, time series) using the new, enriched data.
 
 ## Next Steps
-- Enhance UI feedback during ZIP processing.
-- Optimize WASM memory usage for large artifacts.
-- Add progress indicators for download/unzip operations.
-- Implement error recovery for failed unzip operations.
+- Enhance UI feedback during download/unzip/parse operations.
+- Add progress indicators for download/unzip/parse operations.
+- Implement comprehensive testing for JS unzip/parse (edge cases, errors).
 - Build leaderboard and time series views for contributor XP analytics.
-- Refine IndexedDB caching for instant analytics UI.
-- Unblock analytics/timeline work by ensuring artifact data includes timestamp, node_id, and precise URL for every XP event (enriched at build time, not runtime).
+- Refine IndexedDB caching strategy for instant analytics UI.
 
 ## Blockers
-- **Timeline and analytics views are currently blocked.**
-- The root cause is that artifact data does not include enriched XP event metadata (timestamp, node_id, and precise URL for each XP event).
-- The current artifact only points to the parent issue, not the specific comment/PR/etc.
-- Fetching this data at runtime is not feasible due to the volume of fetches and the IndexedDB-backed instant analytics requirement.
-- The required solution is to enrich artifact data at build time (using the GitHub API) to include all necessary metadata for each XP event.
+- None currently. The data model upgrade has unblocked analytics implementation.
 
 ## Active Decisions
-- Focus is on Bun + TypeScript + esbuild + browser APIs, with WASM integration for specific tasks.
+- Focus is on Bun + TypeScript + esbuild + browser APIs. JS libraries (`fflate`) used for specific tasks like unzipping.
 - Minimal dependencies and simple architecture.
 - All analytics and visualizations must run off IndexedDB-cached data.
 - Visualization UI must remain framework-free and minimal.

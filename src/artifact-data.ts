@@ -1,4 +1,3 @@
-import { downloadAndStoreArtifacts } from "./download-artifacts";
 
 /**
  * Recursively converts Maps (and nested Maps) to plain JS objects/arrays.
@@ -22,23 +21,4 @@ export function mapToObject(obj: any): any {
   return obj;
 }
 
-/**
- * Downloads, unzips, and returns all artifact data as a plain JS object.
- * @param runId The run ID to fetch artifacts for.
- * @param onProgress Optional progress callback.
- * @param onError Optional error callback.
- */
-export async function getUsableArtifacts(
-  runId: string,
-  onProgress?: (phase: string, percent: number, detail?: string) => void,
-  onError?: (error: Error) => void
-): Promise<Record<string, any>> {
-  const artifacts = await downloadAndStoreArtifacts(onProgress, onError);
-
-  // Build a plain object with all artifact data, converting Maps to objects
-  const result: Record<string, any> = {};
-  artifacts.forEach((artifact) => {
-    result[artifact.name] = mapToObject(artifact.data);
-  });
-  return result;
-}
+// Removed unused getUsableArtifacts function which relied on the old download flow

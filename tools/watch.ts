@@ -1,5 +1,11 @@
-import * as esbuild from "esbuild";
 import type { BuildOptions } from "esbuild";
+import * as esbuild from "esbuild";
+
+// Log environment variables being used for define
+console.log("[watch.ts] Reading environment variables for esbuild define:");
+console.log(`  GITHUB_OWNER: ${process.env.GITHUB_OWNER}`);
+console.log(`  GITHUB_REPO: ${process.env.GITHUB_REPO}`);
+console.log(`  GITHUB_TOKEN: ${process.env.GITHUB_TOKEN ? '******' : 'undefined'}`); // Don't log token value
 
 // Shared build options
 const buildOptions: BuildOptions = {
@@ -12,6 +18,13 @@ const buildOptions: BuildOptions = {
   minify: false,
   banner: {
     js: '// Built: ' + new Date().toISOString()
+  },
+  // Define placeholders for build-time replacement
+  define: {
+    __GITHUB_OWNER__: JSON.stringify(process.env.GITHUB_OWNER || ""),
+    __GITHUB_REPO__: JSON.stringify(process.env.GITHUB_REPO || ""),
+    // Ensure token is stringified, handle undefined case
+    __GITHUB_TOKEN__: JSON.stringify(process.env.GITHUB_TOKEN || undefined),
   }
 };
 

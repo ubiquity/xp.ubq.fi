@@ -1,8 +1,6 @@
-import { saveArtifact } from "./db/save-artifact";
-import { downloadArtifactZip } from "./download-artifact";
-import { fetchArtifactsList } from "./fetch-artifacts-list";
-import { getRunIdFromQuery } from "./utils";
+// Removed downloadArtifactZip and fetchArtifactsList imports as they are replaced
 import { unzipArtifact } from "./unzip-artifact";
+import { getRunIdFromQuery } from "./utils";
 
 // Define callback types for progress reporting and error handling
 export type ProgressCallback = (
@@ -17,139 +15,113 @@ export type ErrorCallback = (error: Error) => void;
 const defaultProgress: ProgressCallback = () => {};
 const defaultError: ErrorCallback = () => {};
 
+// Removed unused loadLocalArtifactZip function
+
+const TARGET_ARTIFACT_NAME = "final-aggregated-results";
+
 /**
- * Downloads and loads a single artifact ZIP file from the test fixtures
+ * Fetches metadata for the target artifact.
  */
-async function loadLocalArtifactZip(
-  artifactName: string,
-  runId: string,
-  onProgress: ProgressCallback
-): Promise<any> {
-  // Report start of download
-  onProgress('Download', 0, artifactName);
+// Declare placeholders for build-time replacement
+declare const __GITHUB_OWNER__: string;
+declare const __GITHUB_REPO__: string;
+declare const __GITHUB_TOKEN__: string | undefined; // Token might be optional for public repos
 
-  const response = await fetch(`/api/download-artifact?id=${encodeURIComponent(artifactName)}&run=${encodeURIComponent(runId)}`, {
-    headers: {
-      'Accept': 'application/zip'
-    }
-  });
+async function fetchTargetArtifactMetadata(runId: string): Promise<{ id: number; name: string; archive_download_url: string } | null> {
+  const owner = __GITHUB_OWNER__;
+  const repo = __GITHUB_REPO__;
+  const token = __GITHUB_TOKEN__; // Use defined placeholder
 
-  if (!response.ok) {
-    throw new Error(`Failed to load artifact ${artifactName}: ${response.status}`);
+  if (!owner || !repo) {
+    throw new Error("Build-time variables __GITHUB_OWNER__ or __GITHUB_REPO__ are not defined.");
   }
 
-  const arrayBuffer = await response.arrayBuffer();
-  const zipData = new Uint8Array(arrayBuffer);
+  if (!token) {
+      console.warn("GITHUB_TOKEN not defined at build time, artifact download might fail if repo is private.");
+  }
 
-  onProgress('Download', 100, artifactName);
-  onProgress('Unzipping', 0, artifactName);
+  const apiUrl = `https://api.github.com/repos/${owner}/${repo}/actions/runs/${runId}/artifacts`;
+  console.log(`Fetching artifact list from: ${apiUrl}`);
 
-  const files = await unzipArtifact(zipData);
+  const res = await fetch(apiUrl, {
+    headers: {
+      ...(token && { Authorization: `token ${token}` }), // Conditionally add auth header
+      Accept: "application/vnd.github+json",
+    },
+  });
 
-  // Report unzipping complete
-  onProgress('Unzipping', 100, artifactName);
+  if (!res.ok) {
+    throw new Error(`Failed to fetch artifacts list for run ${runId}: ${res.status} ${res.statusText}`);
+  }
+  const data = await res.json();
+  const artifact = data.artifacts.find((a: any) => a.name === TARGET_ARTIFACT_NAME);
 
-  return files;
+  if (!artifact) {
+    console.warn(`Target artifact "${TARGET_ARTIFACT_NAME}" not found in run ${runId}. Available: ${data.artifacts.map((a: any) => a.name).join(', ')}`);
+    return null; // Return null if not found
+  }
+  console.log(`Found target artifact: ${artifact.name}, ID: ${artifact.id}`);
+  return { id: artifact.id, name: artifact.name, archive_download_url: artifact.archive_download_url };
 }
 
-export type ArtifactData = {
-  name: string;
-  data: any[];
-};
 
 /**
- * Main function to download and process all artifacts
+ * Downloads and processes the single 'final-aggregated-results' artifact.
+ * Returns the parsed JSON array from 'aggregated_results.json'.
  */
-export async function downloadAndStoreArtifacts(
+export async function downloadAndProcessAggregatedArtifact(
   onProgress: ProgressCallback = defaultProgress,
   onError: ErrorCallback = defaultError,
   explicitRunId?: string
-): Promise<ArtifactData[]> {
+): Promise<any[]> { // Return the parsed JSON array directly
   try {
     const runId = explicitRunId ?? getRunIdFromQuery();
     if (!runId) {
       throw new Error("No run ID provided in query params");
     }
+    onProgress('Fetching Metadata', 0, `Run ID: ${runId}`);
 
-    // MINI MODE: Use the same pipeline as test, but with a single artifact
-    const isMini = runId === "mini";
-    const isTest = runId === "test";
-    const results: ArtifactData[] = [];
-    const artifactsList = isMini
-      ? [
-          {
-            id: 1,
-            name: "small-test-fixture",
-            archive_download_url: "/api/download-artifact?id=small-test-fixture&run=mini",
-          },
-        ]
-      : isTest
-      ? [
-          {
-            id: 1,
-            name: "results-ubiquity-os-marketplace",
-            archive_download_url: "/api/download-artifact?id=results-ubiquity-os-marketplace&run=test",
-          },
-          {
-            id: 2,
-            name: "results-ubiquity-os",
-            archive_download_url: "/api/download-artifact?id=results-ubiquity-os&run=test",
-          },
-          {
-            id: 3,
-            name: "results-ubiquity",
-            archive_download_url: "/api/download-artifact?id=results-ubiquity&run=test",
-          },
-        ]
-      : await fetchArtifactsList(runId);
-
-    // Process each artifact sequentially
-    for (let i = 0; i < artifactsList.length; i++) {
-      const artifact = artifactsList[i];
-      const artifactNumber = i + 1;
-      const totalProgress = Math.floor(((artifactNumber - 1) / artifactsList.length) * 100);
-
-      try {
-        // Download and process the artifact
-        const extractedFiles =
-          isMini || isTest
-            ? await loadLocalArtifactZip(
-                artifact.name,
-                runId,
-                (phase, phasePercent, detail) => {
-                  const artifactWeight = 100 / artifactsList.length;
-                  const overallPercent =
-                    totalProgress + (phasePercent / 100) * (artifactWeight / 2);
-                  onProgress(
-                    phase,
-                    overallPercent,
-                    detail || `${artifact.name} (${artifactNumber}/${artifactsList.length})`
-                  );
-                }
-              )
-            : await downloadArtifactZip(artifact, runId).then((data) => unzipArtifact(data));
-
-        // Store the results
-        results.push({
-          name: artifact.name,
-          data: extractedFiles,
-        });
-
-        // Report progress
-        const progress = Math.floor((artifactNumber / artifactsList.length) * 100);
-        onProgress("Processing", progress, `Completed ${artifactNumber}/${artifactsList.length}`);
-      } catch (error) {
-        if (error instanceof Error) {
-          onError(error);
-        } else {
-          onError(new Error(`Unknown error processing ${artifact.name}`));
-        }
-        // Continue with next artifact even if this one fails
-      }
+    // 1. Fetch metadata for the target artifact
+    const artifactMeta = await fetchTargetArtifactMetadata(runId);
+    if (!artifactMeta) {
+        // Handle case where artifact isn't found (e.g., workflow didn't produce it)
+        console.error(`Artifact "${TARGET_ARTIFACT_NAME}" not found for run ${runId}.`);
+        onError(new Error(`Artifact "${TARGET_ARTIFACT_NAME}" not found.`));
+        return []; // Return empty array or handle as appropriate
     }
+    onProgress('Fetching Metadata', 20, `Found artifact: ${artifactMeta.name}`);
 
-    onProgress('Complete', 100, 'All artifacts processed');
-    return results;
+    // 2. Download the artifact ZIP using the archive_download_url
+    const token = __GITHUB_TOKEN__; // Use defined placeholder
+    const archiveUrl = artifactMeta.archive_download_url;
+    console.log(`Downloading artifact from: ${archiveUrl}`);
+    onProgress('Downloading', 20, `Downloading ${artifactMeta.name}...`);
+
+    const zipRes = await fetch(archiveUrl, {
+        headers: {
+          ...(token && { Authorization: `token ${token}` }), // Conditionally add auth header
+          // GitHub artifact download requires redirect following
+        },
+        redirect: 'follow' // Important: Follow redirects for artifact downloads
+    });
+
+    if (!zipRes.ok) {
+        throw new Error(`Failed to download artifact ZIP: ${zipRes.status} ${zipRes.statusText} from ${archiveUrl}`);
+    }
+    const arrayBuffer = await zipRes.arrayBuffer();
+    const zipData = new Uint8Array(arrayBuffer);
+    console.log(`Downloaded ZIP size: ${zipData.length}`);
+    onProgress('Downloading', 60, `Downloaded ${zipData.length} bytes.`);
+
+    // 3. Unzip and parse aggregated_results.json
+    onProgress('Unzipping', 60, `Unzipping ${artifactMeta.name}...`);
+    const parsedJson = await unzipArtifact(zipData); // Use the JS unzipper
+    console.log(`Unzipped and parsed. Result type: ${Array.isArray(parsedJson) ? 'array' : typeof parsedJson}, Length: ${Array.isArray(parsedJson) ? parsedJson.length : 'N/A'}`);
+    onProgress('Unzipping', 100, `Processing complete.`);
+
+    // 4. Return the parsed JSON array
+    onProgress('Complete', 100, 'Artifact processed successfully.');
+    return parsedJson;
 
   } catch (error) {
     if (error instanceof Error) {

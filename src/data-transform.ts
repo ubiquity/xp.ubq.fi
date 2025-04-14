@@ -93,6 +93,61 @@ export function getLeaderboardData(
   return result;
 }
 
+// --- New Transformation for Aggregated Artifact ---
+
+export type AggregatedResultEntry = {
+  org: string;
+  repo: string;
+  issueId: string; // Note: This is the issue *number* as a string
+  metadata: {
+    [contributor: string]: ContributorAnalytics; // Re-use existing type
+  };
+};
+
+/**
+ * Transforms the new aggregated artifact format (array) into the nested
+ * OrgRepoData format expected by analytics functions.
+ * The top-level key will be the runId.
+ */
+export function transformAggregatedToOrgRepoData(
+  aggregatedData: AggregatedResultEntry[],
+  runId: string // Use runId as the top-level key
+): OrgRepoData {
+  const transformed: OrgRepoData = { [runId]: {} };
+
+  for (const entry of aggregatedData) {
+    const { org, repo, issueId, metadata } = entry;
+
+    // Ensure org level exists (should always be runId)
+    if (!transformed[runId]) {
+      transformed[runId] = {};
+    }
+    // Ensure repo level exists
+    if (!transformed[runId][repo]) {
+      transformed[runId][repo] = {};
+    }
+    // Assign metadata directly under the issueId
+    transformed[runId][repo][issueId] = metadata;
+  }
+
+  console.log("Transformed Aggregated Data:", {
+    orgs: Object.keys(transformed),
+    reposByOrg: Object.fromEntries(
+      Object.entries(transformed).map(([org, repos]) => [
+        org,
+        Object.keys(repos)
+      ])
+    ),
+    totalIssues: Object.values(transformed).reduce((acc, repos) =>
+      acc + Object.values(repos).reduce((racc, issues) =>
+        racc + Object.keys(issues).length, 0
+      ), 0
+    )
+  });
+
+  return transformed;
+}
+
 /**
  * Extracts time series XP events for each contributor.
  * Returns an array of contributors with their XP event series.
