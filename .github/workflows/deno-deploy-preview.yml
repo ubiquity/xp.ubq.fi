@@ -19,6 +19,22 @@ jobs:
       - name: Setup Deno
         uses: denoland/setup-deno@v2
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build frontend
+        run: bun run tools/build.ts
+
+      - name: Copy static assets to dist
+        run: |
+          mkdir -p dist
+          cp src/index.html dist/
+          cp src/style.css dist/
+          # Add more static assets here if needed
+
       - name: Set Deno Deploy project name
         id: project_name
         run: |
