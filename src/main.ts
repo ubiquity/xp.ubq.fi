@@ -50,12 +50,14 @@ async function init() {
     let globalMinTimeMins: number = 0; // In minutes since epoch
     let globalMaxTimeMins: number = 0; // In minutes since epoch
     let isAnimating: boolean = false; // Flag to control fade-in
+    let scaleMode: 'linear' | 'log' = 'linear'; // Add scale mode state
 
     // --- UI Elements ---
     const root = document.getElementById("xp-analytics-root")!;
     const chartArea = document.getElementById("xp-analytics-chart-area")!;
     const contributorSelect = document.getElementById("contributor-select") as HTMLSelectElement;
     const viewToggle = document.getElementById("view-toggle") as HTMLButtonElement;
+    const scaleToggle = document.getElementById("scale-toggle") as HTMLButtonElement; // Get scale toggle button
     const timeRange = document.getElementById("time-range") as HTMLInputElement;
     const contextLabel = document.getElementById("xp-analytics-context-label") as HTMLSpanElement;
     const avatarImg = document.getElementById("xp-analytics-org-avatar") as HTMLImageElement;
@@ -78,6 +80,7 @@ async function init() {
           // Let leaderboard determine its own height based on entries
           highlightContributor: selectedContributor !== "All" ? selectedContributor : leaderboardData[0]?.contributor,
           ranks: ranks, // Pass the ranks object
+          scaleMode: scaleMode, // Pass the scale mode
         });
         timeRangeText = ""; // No time range label for leaderboard
       } else {
@@ -266,6 +269,16 @@ async function init() {
         // animateTimeline();
       }
       render(); // Render the new view
+    });
+
+    scaleToggle.addEventListener("click", () => {
+        scaleMode = scaleMode === 'linear' ? 'log' : 'linear';
+        scaleToggle.textContent = scaleMode === 'linear' ? "Use Log Scale" : "Use Linear Scale";
+        isAnimating = false; // Stop animation if user interacts
+        // Re-render only if currently in leaderboard view
+        if (viewMode === 'leaderboard') {
+            render();
+        }
     });
 
     timeRange.addEventListener("input", () => {
