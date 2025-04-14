@@ -264,12 +264,8 @@ Deno.serve(async (req: Request) => {
           return jsonResponse({ error: `Test fixture not found: ${artifactId}.zip` }, 404);
         }
       } else {
-        }
-      } else {
         // Proxy to GitHub using App installation token
-        if (!ORG || !REPO) {
-          throw new Error("ORG and REPO environment variables must be set");
-        }
+        // ORG and REPO are now hard-coded, so this check is not needed
 
         log("ZIP", `Fetching from GitHub API: ${artifactId}`, colors.blue);
         const artifactUrl = `https://api.github.com/repos/${ORG}/${REPO}/actions/artifacts/${artifactId}/zip`;
