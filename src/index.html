@@ -25,9 +25,12 @@
       <input id="time-range" type="range" min="0" max="100" value="100" class="xp-analytics-time-range-input">
       <span id="time-range-label" class="xp-analytics-time-range-label"></span>
     </div>
-    <div id="xp-analytics-chart-area" class="xp-analytics-chart-area"></div>
+    <div id="main-content" class="main-content"> <!-- New container -->
+      <div id="xp-analytics-chart-area" class="xp-analytics-chart-area"></div>
+      <dev-mode-widget></dev-mode-widget> <!-- Moved dev widget inside -->
+    </div>
   </div>
-  <dev-mode-widget></dev-mode-widget>
+  <!-- Dev widget moved inside #main-content -->
   <script src="/bundle.js" type="module"></script>
 </body>
 </html>

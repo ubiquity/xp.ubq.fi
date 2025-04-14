@@ -69,7 +69,7 @@ select {
 .xp-analytics-view-toggle {
   margin-left: 32px;
   font-size: 16px;
-  padding: 4px 16px;
+  padding: 8px 16px;
   border-radius: 4px;
   border: none;
   background: #222;
@@ -98,7 +98,32 @@ select {
   box-sizing: border-box;
   overflow: hidden;
   /* align-items: center; */
+  /* Removed width: 100% as flex will handle it */
 }
+
+/* New styles for main content layout */
+.main-content {
+  display: flex;
+  flex: 1; /* Allow this container to grow and fill space */
+  overflow: hidden; /* Prevent content overflow */
+  gap: 16px; /* Add gap between chart and sidebar */
+  padding: 0 16px 16px 16px; /* Add padding around main content, except top */
+  box-sizing: border-box;
+}
+
+.main-content > #xp-analytics-chart-area {
+  flex: 1; /* Chart area takes most space */
+  min-width: 0; /* Allow chart area to shrink */
+}
+
+.main-content > dev-mode-widget {
+  flex: 0 0 320px; /* Sidebar fixed width, don't grow or shrink */
+  overflow-y: auto; /* Allow sidebar content to scroll if needed */
+  border-left: 1px solid #222; /* Optional separator */
+  padding-left: 16px; /* Optional padding */
+  box-sizing: border-box;
+}
+
 
 svg {
   width: 100%;

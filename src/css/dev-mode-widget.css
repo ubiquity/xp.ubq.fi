@@ -41,8 +41,8 @@
 }
 
 .workflow-run--active {
-  background: #333;
-  border-left: 2px solid var(--chart-color-good);
+  background: #202020;
+  /* border-left: 2px solid var(--chart-color-good); */
   /* padding-left: 10px; */
   /* margin-left: -12px; */
 }

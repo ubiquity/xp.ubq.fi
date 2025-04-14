@@ -72,14 +72,34 @@ export class DevModeWidget extends HTMLElement {
 
   // isCacheOnly: true if rendering from cache, false if rendering from fresh API (should only be true in this widget)
   private async renderWorkflowRuns(runs: any[], isCacheOnly = false) {
+    // --- Dynamic Item Calculation ---
+    const itemHeight = 68; // Estimated height (padding + margin + text) in pixels
+    let numToDisplay = 10; // Default fallback
+
+    // Ensure container is in the DOM and has height before calculating
+    if (this.runsContainer.offsetHeight > 0) {
+        const availableHeight = this.runsContainer.offsetHeight;
+        numToDisplay = Math.max(1, Math.floor(availableHeight / itemHeight));
+        console.log(`DevWidget: Height=${availableHeight}, ItemHeight=${itemHeight}, Displaying=${numToDisplay}`); // Optional debug log
+    } else {
+        // If container height isn't available yet (e.g., initial render before layout),
+        // maybe try getting height from `this` (the custom element) or defer calculation slightly.
+        // For now, we'll stick to the default if container height is 0.
+        console.log(`DevWidget: Container height 0, using default ${numToDisplay}`);
+    }
+    // --- End Calculation ---
+
     this.runsContainer.innerHTML = "";
 
-    if (!runs.length) {
+    const runsToRender = runs.slice(0, numToDisplay); // Slice the array
+
+    if (!runsToRender.length) {
       this.runsContainer.innerHTML = '<div class="dev-mode-widget__error">No workflow runs found</div>';
       return;
     }
 
-    for (const run of runs) {
+    // Render only the calculated number of runs
+    for (const run of runsToRender) {
       const runElement = document.createElement("div");
       // Get current run ID from URL
       const urlParams = new URLSearchParams(window.location.search);

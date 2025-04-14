@@ -77,13 +77,16 @@ export function drawContributorLine({
     let finalLineOpacity = modulatedOpacity * 0.5;
     let finalPointOpacity = Math.min(1.0, finalLineOpacity + 0.25);
 
-    if (isHighlight) {
-        finalLineOpacity = 1.0 * (animationProgress ?? 1);
-        finalPointOpacity = 1.0 * (animationProgress ?? 1);
-    }
+    // Removed the special case for isHighlight
+    // if (isHighlight) {
+    //     finalLineOpacity = 1.0 * (animationProgress ?? 1);
+    //     finalPointOpacity = 1.0 * (animationProgress ?? 1);
+    // }
+
+    // Error state still overrides opacity
     if (isError) {
-        finalLineOpacity = 0.85;
-        finalPointOpacity = 0.85;
+        finalLineOpacity = 0.85; // Keep error highlight strong
+        finalPointOpacity = 0.85; // Keep error highlight strong
     }
 
     if (!isHighlight && !isError) {

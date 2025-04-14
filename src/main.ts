@@ -23,24 +23,20 @@ async function init() {
     // (No longer needed: widget is instantiated via <dev-mode-widget> in HTML)
 
     const runId = getRunIdFromQuery();
+    // Removed the block that showed the "Development Mode" message
     if (!runId) {
-      if (!isProduction()) {
-        const root = document.getElementById("xp-analytics-root")!;
-        root.innerHTML = `
-          <div class="dev-mode-message">
-            <div>
-              <h2>Development Mode</h2>
-              <p>Select a run from the widget in the bottom right corner</p>
-            </div>
-          </div>
-        `;
-      } else {
-        console.error("No run ID found in URL");
-      }
-      return;
+        // If no run ID, we might still want to show *something* or log an error,
+        // but not the old dev mode message. For now, just log error if production.
+        if (isProduction()) {
+            console.error("No run ID found in URL");
+        }
+        // Potentially display a different default message or just let the widget handle selection.
+        // For now, let it proceed, the widget will show runs.
+        // return; // Removed return, allow page to load with widget
     }
 
     // --- State and Data ---
+    // Initialize even if runId is null, but data loading depends on it
     let leaderboardData: LeaderboardEntry[] = [];
     let timeSeriesData: TimeSeriesEntry[] = [];
     let viewMode: ViewMode = "leaderboard";
@@ -277,78 +273,104 @@ async function init() {
       render();
     });
 
-    // --- Load Data ---
-    root.style.position = "relative";
-    root.appendChild(loadingOverlay);
-    await loadArtifactData(runId, {
-      onProgress: (phase, percent, detail) => {
-        progressText.textContent = `${phase}: ${Math.round(percent)}%${detail ? ` - ${detail}` : ""}`;
-        progressText.classList.remove("error");
-      },
-      onError: (error) => {
-        console.error(error);
-        progressText.textContent = `Error: ${error.message}`;
-        progressText.classList.add("error");
-      },
-      onComplete: (data) => {
-        loadingOverlay.remove();
-        leaderboardData = data.leaderboard;
-        timeSeriesData = data.timeSeries;
+    // --- Load Data (only if runId is valid) ---
+    if (runId) {
+      root.style.position = "relative"; // Needed for overlay positioning
+      root.appendChild(loadingOverlay);
+      await loadArtifactData(runId, { // Pass guaranteed non-null runId
+        onProgress: (phase, percent, detail) => {
+          progressText.textContent = `${phase}: ${Math.round(percent)}%${detail ? ` - ${detail}` : ""}`;
+          progressText.classList.remove("error");
+        },
+        onError: (error) => {
+          console.error(error);
+          progressText.textContent = `Error: ${error.message}`;
+          progressText.classList.add("error");
+          // Potentially remove overlay or leave error message
+        },
+        onComplete: (data) => {
+          loadingOverlay.remove();
+          leaderboardData = data.leaderboard;
+          timeSeriesData = data.timeSeries;
 
-        (window as any).analyticsData = data;
-        console.log("%c✨ Developer Note: Access all analytics data via window.analyticsData", "color: #00e0ff; font-weight: bold;");
-        console.log("Leaderboard Data:", leaderboardData);
-        console.log("Time Series Data:", timeSeriesData);
+          (window as any).analyticsData = data;
+          console.log("%c✨ Developer Note: Access all analytics data via window.analyticsData", "color: #00e0ff; font-weight: bold;");
+          console.log("Leaderboard Data:", leaderboardData);
+          console.log("Time Series Data:", timeSeriesData);
 
-        // --- Determine and Set Context Label & Avatar ---
-        let orgName: string | null = null;
-        if (contextLabel && avatarImg && data.rawData && runId && data.rawData[runId]) {
-          const orgRepoDataForRun = data.rawData[runId];
-          const orgRepoKeys = Object.keys(orgRepoDataForRun);
-          if (orgRepoKeys.length === 1) {
-            const key = orgRepoKeys[0];
-            if (key.includes('/')) {
-              const [org, repo] = key.split('/');
-              contextLabel.textContent = `${org}/${repo}`; // Use user's format
-              orgName = org;
+          // --- Determine and Set Context Label & Avatar ---
+          let orgName: string | null = null;
+          if (contextLabel && avatarImg && data.rawData && runId && data.rawData[runId]) {
+            const orgRepoDataForRun = data.rawData[runId];
+            const orgRepoKeys = Object.keys(orgRepoDataForRun);
+            if (orgRepoKeys.length === 1) {
+              const key = orgRepoKeys[0];
+              if (key.includes('/')) {
+                const [org, repo] = key.split('/');
+                contextLabel.textContent = `${org}/${repo}`; // Use user's format
+                orgName = org;
+              } else {
+                contextLabel.textContent = key; // Use user's format
+                orgName = key;
+              }
+            } else if (orgRepoKeys.length > 1) {
+              // If multiple repos/orgs, try to determine a common org
+              const firstKey = orgRepoKeys[0];
+              if (firstKey.includes('/')) {
+                const [org] = firstKey.split('/');
+                // Check if all keys share the same org prefix
+                const allShareOrg = orgRepoKeys.every(k => k.startsWith(org + '/'));
+                if (allShareOrg) {
+                    contextLabel.textContent = org; // Display common org
+                    orgName = org;
+                } else {
+                    contextLabel.textContent = 'Multiple Contexts'; // Indicate multiple sources
+                    orgName = null; // Can't determine single org for avatar
+                }
+              } else {
+                 // If keys are just org names without slashes
+                 contextLabel.textContent = 'Multiple Orgs';
+                 orgName = null;
+              }
             } else {
-              contextLabel.textContent = key; // Use user's format
-              orgName = key;
+               contextLabel.textContent = 'Context Unknown';
+               orgName = null;
             }
-          } else if (orgRepoKeys.length > 1) {
-            const firstKey = orgRepoKeys[0];
-            if (firstKey.includes('/')) {
-              const [org] = firstKey.split('/');
-              contextLabel.textContent = org; // Use user's format
-              orgName = org;
+
+            // Set avatar source if org name was found
+            if (orgName) {
+              avatarImg.src = `https://github.com/${orgName}.png`;
+              avatarImg.style.display = 'inline-block'; // Show avatar
+              avatarImg.onerror = () => { avatarImg.style.display = 'none'; }; // Hide if avatar fails to load
             } else {
-              contextLabel.textContent = firstKey; // Use user's format
-              orgName = firstKey;
+               avatarImg.style.display = 'none'; // Hide avatar if no single org name
             }
-          } else {
-             contextLabel.textContent = 'Context Unknown';
-             avatarImg.style.display = 'none'; // Hide avatar if context unknown
-          }
 
-          // Set avatar source if org name was found
-          if (orgName) {
-            avatarImg.src = `https://github.com/${orgName}.png`;
-            avatarImg.style.display = 'inline-block'; // Show avatar
-            avatarImg.onerror = () => { avatarImg.style.display = 'none'; }; // Hide if avatar fails to load
           } else {
-             avatarImg.style.display = 'none'; // Hide avatar if no org name
+             // Hide avatar if prerequisites not met
+             if(avatarImg) avatarImg.style.display = 'none';
+             if(contextLabel) contextLabel.textContent = 'Context Unknown'; // Set default text if needed
           }
+          // --- End Context Label & Avatar Logic ---
 
-        } else {
-           // Hide avatar if prerequisites not met
-           if(avatarImg) avatarImg.style.display = 'none';
+          initializeUI(); // Initialize after data is loaded
         }
-        // --- End Context Label & Avatar Logic ---
-
-
-        initializeUI(); // Initialize after data is loaded
+      });
+    } else {
+      // No runId, so don't show loading overlay or try to load specific run data.
+      // The dev-mode-widget will load its list independently.
+      // Display a placeholder message in the chart area.
+      if (chartArea) {
+        // Ensure the dev-mode-message class exists or define styles for it
+        chartArea.innerHTML = `<div class="dev-mode-message" style="display: flex; align-items: center; justify-content: center; height: 100%; color: #ccc;"><div><p>Select a report from the sidebar.</p></div></div>`;
       }
-    });
+      // Hide elements that depend on run data
+      if (contributorSelect) contributorSelect.style.display = 'none';
+      if (viewToggle) viewToggle.style.display = 'none';
+      if (timeRange) timeRange.parentElement?.style.display === 'none'; // Hide slider container
+      if (contextLabel) contextLabel.textContent = 'No Report Selected';
+      if (avatarImg) avatarImg.style.display = 'none';
+    }
 
     // Clean up on unload
     window.addEventListener("unload", cleanupWorker);
