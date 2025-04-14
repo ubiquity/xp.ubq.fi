@@ -28,7 +28,6 @@ export function renderTimeSeriesChart(
     errorContributors?: string[]; // Optionally mark contributors as "bad"
     showLegend?: boolean;
     maxYValue?: number; // Maximum Y value to use for scaling
-    // timeRangePercent?: number; // No longer used for filtering/interpolation here
     ranks?: { [contributor: string]: number }; // Map of contributor ranks for opacity
     minTime?: number | null; // Optional fixed minimum time for X-axis
     maxTime?: number | null; // Optional fixed maximum time for X-axis
@@ -46,15 +45,12 @@ export function renderTimeSeriesChart(
   const BG = computedStyle.getPropertyValue('--chart-color-bg').trim();
 
   // --- Config ---
-  // SVG namespace
   const svgNS = "http://www.w3.org/2000/svg";
-
-  // Responsive width: use container's width or fallback to 600
   const width = options?.width ?? (container.clientWidth || container.getBoundingClientRect().width || 600);
-  // Use container height if available and no option is passed
+  // Use container height if available and no option is passed, fallback to 320
   const height = options?.height ?? (container.clientHeight || container.getBoundingClientRect().height || 320);
 
-  // Calculate dynamic margins based on label widths (only needs to run once ideally, but ok here)
+  // Calculate dynamic margins based on label widths
   const tempSvg = document.createElementNS(svgNS, "svg");
   tempSvg.style.visibility = "hidden";
   document.body.appendChild(tempSvg);
@@ -69,7 +65,6 @@ export function renderTimeSeriesChart(
   });
   document.body.removeChild(tempSvg);
 
-  // Set margins with padding
   const leftMargin = options?.leftMargin ?? 64;
   const rightMargin = options?.rightMargin ?? Math.max(32, maxContributorWidth + 32);
   const topMargin = options?.topMargin ?? 32;
@@ -79,10 +74,8 @@ export function renderTimeSeriesChart(
   const showLegend = options?.showLegend ?? true;
 
   // --- Axis Scaling ---
-  // Use provided fixed time range if available, otherwise calculate from full input data
   const minTime = options?.minTime ?? Math.min(Date.now(), ...data.flatMap(entry => entry.series.map(pt => new Date(pt.time).getTime())));
   const maxTime = options?.maxTime ?? Math.max(Date.now(), ...data.flatMap(entry => entry.series.map(pt => new Date(pt.time).getTime())));
-  // Use provided fixed Y max if available, otherwise calculate from full input data
   let maxXP = options?.maxYValue ?? 1;
   if (!options?.maxYValue) {
      data.forEach(entry => {
@@ -96,79 +89,54 @@ export function renderTimeSeriesChart(
 
   // --- Data Processing (Cumulative Sum, Filtering, Interpolation) ---
   const finalContributorData = data.map(entry => {
-    // Sort events by time (important for cumulative sum and filtering)
     const sortedSeries = [...entry.series].sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
-
-    // Calculate cumulative points for the *entire* series
     let cumulative = 0;
     const allCalculatedPoints = sortedSeries.map(pt => {
       cumulative += pt.xp;
-      return {
-        time: new Date(pt.time).getTime(),
-        xp: cumulative
-      };
+      return { time: new Date(pt.time).getTime(), xp: cumulative };
     });
 
-    // Filter points based on cutoffTimeMs and interpolate the last segment
     let pointsToRender = allCalculatedPoints;
     if (options?.cutoffTimeMs !== undefined && allCalculatedPoints.length > 0) {
-      // Find the index of the last point *at or before* the cutoff time
       let lastVisibleIndex = -1;
       for (let i = 0; i < allCalculatedPoints.length; i++) {
         if (allCalculatedPoints[i].time <= options.cutoffTimeMs) {
           lastVisibleIndex = i;
         } else {
-          break; // Points are sorted by time
+          break;
         }
       }
 
       if (lastVisibleIndex === -1) {
-        // Cutoff is before the first point - render nothing for this line yet
-        // (or maybe just the first point if cutoff >= first point time?)
          if (options.cutoffTimeMs >= allCalculatedPoints[0].time) {
-            // If cutoff is past the first point's time, but before the second,
-            // we might want to show just the first point.
-            // Let's slice up to index 0 + 1 = 1.
              pointsToRender = allCalculatedPoints.slice(0, 1);
          } else {
              pointsToRender = [];
          }
       } else {
-        // Take points up to the last visible one
         pointsToRender = allCalculatedPoints.slice(0, lastVisibleIndex + 1);
-
-        // Check if interpolation is needed between lastVisibleIndex and the next point
         const nextPoint = allCalculatedPoints[lastVisibleIndex + 1];
         if (nextPoint && options.cutoffTimeMs > allCalculatedPoints[lastVisibleIndex].time) {
            const prevPoint = allCalculatedPoints[lastVisibleIndex];
            const timeDiff = nextPoint.time - prevPoint.time;
-           if (timeDiff > 0) { // Avoid division by zero
+           if (timeDiff > 0) {
              const fraction = (options.cutoffTimeMs - prevPoint.time) / timeDiff;
              const interpolatedXP = prevPoint.xp + (nextPoint.xp - prevPoint.xp) * fraction;
-             // Add the interpolated point representing the exact cutoff time state
-             pointsToRender.push({
-               time: options.cutoffTimeMs,
-               xp: interpolatedXP
-             });
+             pointsToRender.push({ time: options.cutoffTimeMs, xp: interpolatedXP });
            }
         }
       }
     }
-    // Safeguard: If filtering resulted in empty but shouldn't have, keep first point.
      if (allCalculatedPoints.length > 0 && pointsToRender.length === 0 && options?.cutoffTimeMs && options.cutoffTimeMs >= allCalculatedPoints[0].time) {
-        console.warn("Points became empty during filtering, restoring first point.", { contributor: entry.contributor });
         pointsToRender = allCalculatedPoints.slice(0, 1);
      }
-
     return { ...entry, points: pointsToRender };
-
-  }).filter(entry => entry.points.length > 0); // Filter out contributors with no points to render
-
+  }).filter(entry => entry.points.length > 0);
 
   // --- SVG Setup ---
   const svg = document.createElementNS(svgNS, "svg");
   svg.setAttribute("width", "100%");
-  svg.setAttribute("height", height.toString()); // Use calculated/container height
+  svg.setAttribute("height", height.toString());
   svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
   svg.style.display = "block";
   svg.style.background = BG;
@@ -203,29 +171,38 @@ export function renderTimeSeriesChart(
     const isError = errorContributors.includes(entry.contributor);
 
     // --- Opacity Calculation ---
-    let baseOpacity = 0.7; // Default base opacity
-    const minRankOpacity = 0.2;
+    let rankOpacity = 0.5; // Default base opacity if ranks not provided or invalid rank
+    const minRankOpacity = 0.2; // Define minimum rank opacity
     if (options?.ranks) {
       const rank = options.ranks[entry.contributor];
       if (rank && rank > 0) {
-        baseOpacity = Math.max(minRankOpacity, 1 / rank);
+         rankOpacity = Math.max(minRankOpacity, 1 / rank); // Use rank opacity directly, with floor
       } else {
-        baseOpacity = minRankOpacity;
+         rankOpacity = minRankOpacity; // Use floor if rank invalid
       }
     }
-    // Apply animation fade-in
-    let currentOpacity = baseOpacity;
+
+    // Apply animation modulation
+    let modulatedOpacity = rankOpacity;
     if (options?.animationProgress !== undefined && options.animationProgress < 1) {
-       currentOpacity = Math.max(0.05, baseOpacity * options.animationProgress);
+       modulatedOpacity = Math.max(0.05, rankOpacity * options.animationProgress);
     }
+
+    // Calculate final opacities for line/label and points
+    let finalLineOpacity = modulatedOpacity; // Line opacity is modulated rank opacity
+    let finalPointOpacity = Math.min(1.0, finalLineOpacity + 0.25); // Point opacity = line + 25%
+
     // Apply highlight/error overrides
     if (isHighlight) {
-      currentOpacity = 1.0;
+      finalLineOpacity = 1.0;
+      finalPointOpacity = 1.0;
     }
     if (isError) {
-       currentOpacity = 0.85; // Error takes precedence
+       finalLineOpacity = 0.85; // Error takes precedence
+       finalPointOpacity = 0.85;
     }
-    const finalOpacity = currentOpacity;
+    // Minimum visibility is handled by minRankOpacity and animation modulation floor
+
 
     // --- Map Points to SVG Coords ---
     const points = entry.points.map((pt) => {
@@ -244,9 +221,9 @@ export function renderTimeSeriesChart(
       }
       path.setAttribute("d", d);
       path.setAttribute("stroke", isError ? BAD : GOOD);
-      path.setAttribute("stroke-width", "2"); // Constant width
+      path.setAttribute("stroke-width", "2");
       path.setAttribute("fill", "none");
-      path.setAttribute("opacity", finalOpacity.toString());
+      path.setAttribute("opacity", finalLineOpacity.toString()); // Use finalLineOpacity
       svg.appendChild(path);
     }
 
@@ -255,9 +232,9 @@ export function renderTimeSeriesChart(
       const circle = document.createElementNS(svgNS, "circle");
       circle.setAttribute("cx", pt.x.toString());
       circle.setAttribute("cy", pt.y.toString());
-      circle.setAttribute("r", "2"); // Constant radius
+      circle.setAttribute("r", "2");
       circle.setAttribute("fill", isError ? BAD : GOOD);
-      circle.setAttribute("opacity", finalOpacity.toString());
+      circle.setAttribute("opacity", finalPointOpacity.toString()); // Use finalPointOpacity
       svg.appendChild(circle);
     });
 
@@ -266,12 +243,12 @@ export function renderTimeSeriesChart(
       const label = document.createElementNS(svgNS, "text");
       label.setAttribute("font-size", "14");
       label.setAttribute("fill", isError ? BAD : GOOD);
-      label.setAttribute("opacity", finalOpacity.toString());
+      label.setAttribute("opacity", finalLineOpacity.toString()); // Use finalLineOpacity for label too
       label.setAttribute("text-anchor", "start");
       label.textContent = entry.contributor;
 
       const lastSvgPoint = points[points.length - 1];
-      label.setAttribute("x", "0"); // Position temporarily
+      label.setAttribute("x", "0");
       label.setAttribute("y", "-9999");
       svg.appendChild(label);
       const textWidth = label.getBBox().width;
@@ -283,7 +260,7 @@ export function renderTimeSeriesChart(
         labelX = minLabelX;
       }
       label.setAttribute("x", labelX.toString());
-      label.setAttribute("y", (lastSvgPoint.y + 4).toString()); // Offset slightly below point
+      label.setAttribute("y", (lastSvgPoint.y + 4).toString());
     }
   });
 
