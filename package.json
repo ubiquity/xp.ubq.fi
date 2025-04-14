@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "scripts": {
     "build": "bun run tools/build.ts",
+    "generate:icons": "bun run tools/generate-material-icons-map.ts",
     "type-check": "tsc --noEmit --watch",
     "dev:server": "bun --hot run tools/server.ts",
     "dev:frontend": "run-p watch type-check",
