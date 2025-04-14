@@ -111,7 +111,8 @@ async function init() {
           minTime: globalMinTimeMs, // Pass fixed min/max time in MS
           maxTime: globalMaxTimeMs,
           animationProgress: animationProgress, // Pass animation progress (0-1)
-          cutoffTimeMs: cutoffTimeMs // Pass the calculated cutoff time
+          cutoffTimeMs: cutoffTimeMs, // Pass the calculated cutoff time
+          scaleMode: scaleMode // Pass the scale mode
         });
 
         // --- Human-readable time range label ---
@@ -275,10 +276,8 @@ async function init() {
         scaleMode = scaleMode === 'linear' ? 'log' : 'linear';
         scaleToggle.textContent = scaleMode === 'linear' ? "Use Log Scale" : "Use Linear Scale";
         isAnimating = false; // Stop animation if user interacts
-        // Re-render only if currently in leaderboard view
-        if (viewMode === 'leaderboard') {
-            render();
-        }
+        // Re-render the current view to apply the new scale
+        render();
     });
 
     timeRange.addEventListener("input", () => {

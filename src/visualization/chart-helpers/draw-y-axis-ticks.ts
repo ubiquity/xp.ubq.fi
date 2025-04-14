@@ -11,6 +11,7 @@ interface DrawYAxisTicksOptions {
   leftMargin: number;
   GREY: string;
   GREY_LIGHT: string;
+  scaleMode?: 'linear' | 'log'; // Add scale mode option
 }
 
 export function drawYAxisTicks({
@@ -23,19 +24,29 @@ export function drawYAxisTicks({
   leftMargin,
   GREY,
   GREY_LIGHT,
+  scaleMode = 'linear', // Default to linear
 }: DrawYAxisTicksOptions): void {
   const chartHeight = height - topMargin - bottomMargin;
   const numSegments = 4; // Corresponds to the 5 grid lines (0 to 4)
+  const logMaxXP = Math.log10(Math.max(1, maxXP)); // Needed for log scale positioning
 
   // Iterate through the 5 grid line positions (0 to 4)
   for (let i = 0; i <= numSegments; i++) {
-      // Calculate the Y position exactly like the grid lines
-      // i=0 corresponds to the top grid line (maxXP), i=4 corresponds to the bottom grid line (0 XP)
-      const y = topMargin + chartHeight * (i / numSegments); // y goes from topMargin to topMargin + chartHeight
+      // Calculate the LINEAR value this tick represents
+      const linearTickValue = maxXP * (1 - (i / numSegments)); // Value decreases as i increases (top to bottom)
 
-      // Calculate the corresponding XP value for this grid line position
-      // When i=0 (top), value is maxXP. When i=4 (bottom), value is 0.
-      const tickValue = maxXP * (1 - (i / numSegments));
+      // Calculate the Y position based on the scale mode
+      let y = topMargin + chartHeight; // Default to bottom
+      if (scaleMode === 'log' && maxXP > 1) {
+          const logValue = Math.log10(Math.max(1, linearTickValue));
+          y = topMargin + chartHeight * (1 - (logMaxXP > 0 ? logValue / logMaxXP : 0));
+      } else { // Linear scale
+          y = topMargin + chartHeight * (i / numSegments); // y goes from topMargin (i=0) to topMargin + chartHeight (i=4)
+      }
+      y = Number.isFinite(y) ? y : topMargin + chartHeight; // Fallback
+
+      // Calculate the corresponding XP value for this grid line position (always linear for label)
+      const tickValue = linearTickValue; // Use the calculated linear value for the label
 
       // Draw the tick mark
       const tickMark = document.createElementNS(svgNS, "line");

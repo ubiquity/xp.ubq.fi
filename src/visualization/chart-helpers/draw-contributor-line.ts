@@ -33,6 +33,7 @@ interface DrawContributorLineOptions {
     cutoffTimeMs?: number;
     startRadius: number;
     endRadius: number;
+    scaleMode?: 'linear' | 'log'; // Add scale mode option
 }
 
 export function drawContributorLine({
@@ -57,6 +58,7 @@ export function drawContributorLine({
     cutoffTimeMs,
     startRadius,
     endRadius,
+    scaleMode = 'linear', // Default to linear
 }: DrawContributorLineOptions): void {
 
     // --- Opacity Calculation ---
@@ -99,17 +101,33 @@ export function drawContributorLine({
     const chartWidth = width - leftMargin - rightMargin;
     const chartHeight = height - topMargin - bottomMargin;
 
+    const logMaxXP = Math.log10(Math.max(1, maxXP)); // Pre-calculate for log scale
+
     // Map the points used for drawing the line path
     const linePoints = entry.pointsForLine.map((pt) => {
         const x = leftMargin + (((pt.time ?? minTime ?? 0) - (minTime ?? 0)) / timeRangeDuration) * chartWidth;
-        const y = topMargin + (1 - (maxXP > 0 ? pt.xp / maxXP : 0)) * chartHeight; // Prevent div by zero
+        let y = topMargin + chartHeight; // Default to bottom
+        if (scaleMode === 'log' && maxXP > 1) {
+            const logXP = Math.log10(Math.max(1, pt.xp));
+            y = topMargin + chartHeight * (1 - (logMaxXP > 0 ? logXP / logMaxXP : 0));
+        } else { // Linear scale
+            y = topMargin + chartHeight * (1 - (maxXP > 0 ? pt.xp / maxXP : 0));
+        }
+        y = Number.isFinite(y) ? y : topMargin + chartHeight; // Fallback
         return { x, y }; // Only need x, y for path
     });
 
     // Map *all* original points to SVG Coords for drawing circles
     const circlePoints: SvgPoint[] = entry.allPoints.map((pt) => {
         const x = leftMargin + (((pt.time ?? minTime ?? 0) - (minTime ?? 0)) / timeRangeDuration) * chartWidth;
-        const y = topMargin + (1 - (maxXP > 0 ? pt.xp / maxXP : 0)) * chartHeight; // Prevent div by zero
+        let y = topMargin + chartHeight; // Default to bottom
+        if (scaleMode === 'log' && maxXP > 1) {
+            const logXP = Math.log10(Math.max(1, pt.xp));
+            y = topMargin + chartHeight * (1 - (logMaxXP > 0 ? logXP / logMaxXP : 0));
+        } else { // Linear scale
+            y = topMargin + chartHeight * (1 - (maxXP > 0 ? pt.xp / maxXP : 0));
+        }
+        y = Number.isFinite(y) ? y : topMargin + chartHeight; // Fallback
         // Include original time/xp
         return { x, y, time: pt.time, xp: pt.xp };
     });

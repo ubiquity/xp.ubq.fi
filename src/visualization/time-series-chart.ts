@@ -50,6 +50,7 @@ export function renderTimeSeriesChart(
     maxTime?: number | null; // Optional fixed maximum time for X-axis
     animationProgress?: number; // Optional animation progress (0-1) for fade-in effect
     cutoffTimeMs?: number; // Optional cutoff time for filtering/interpolation
+    scaleMode?: 'linear' | 'log'; // Add scale mode option
   }
 ) {
   // Get CSS variables
@@ -130,6 +131,7 @@ export function renderTimeSeriesChart(
   const highlightContributor = options?.highlightContributor ?? data[0]?.contributor;
   const errorContributors = options?.errorContributors ?? [];
   const showLegend = options?.showLegend ?? true;
+  const scaleMode = options?.scaleMode ?? 'linear'; // Get scale mode
 
   // --- Data Processing using Helper ---
   const finalContributorData: ProcessedContributorData[] = processChartData({
@@ -147,11 +149,27 @@ export function renderTimeSeriesChart(
   container.innerHTML = "";
   container.appendChild(svg);
 
-  // --- Draw grid lines ---
+  // --- Draw grid lines (conditional) ---
+  const chartHeight = height - topMargin - bottomMargin;
+  const logMaxXP = Math.log10(Math.max(1, maxXP)); // Needed for log grid lines
+
   for (let i = 0; i <= 4; i++) {
-    const y = topMargin + ((height - topMargin - bottomMargin) * i) / 4;
-    const line = document.createElementNS(svgNS, "line");
-    line.setAttribute("x1", leftMargin.toString());
+      // Calculate the linear value this grid line represents (0 to maxXP)
+      const linearValue = (i / 4) * maxXP;
+      let y = topMargin; // Default to top
+
+      if (scaleMode === 'log' && maxXP > 1) {
+          const logValue = Math.log10(Math.max(1, linearValue));
+          // Position based on log scale (inverted: 0 is bottom, logMaxXP is top)
+          y = topMargin + chartHeight * (1 - (logMaxXP > 0 ? logValue / logMaxXP : 0));
+      } else {
+          // Linear position
+          y = topMargin + chartHeight * (1 - (i / 4)); // Inverted: 0 is bottom, 1 (i=4) is top
+      }
+      y = Number.isFinite(y) ? y : topMargin + chartHeight; // Fallback to bottom
+
+      const line = document.createElementNS(svgNS, "line");
+      line.setAttribute("x1", leftMargin.toString());
     line.setAttribute("x2", (width - rightMargin).toString());
     line.setAttribute("y1", y.toString());
     line.setAttribute("y2", y.toString());
@@ -180,8 +198,10 @@ export function renderTimeSeriesChart(
   svg.appendChild(axisLineX);
 
   // --- Draw Axis Ticks using Helpers ---
-  drawYAxisTicks({ svg, svgNS, maxXP, height, topMargin, bottomMargin, leftMargin, GREY, GREY_LIGHT });
+  // Pass scaleMode to Y-axis ticks helper
+  drawYAxisTicks({ svg, svgNS, maxXP, height, topMargin, bottomMargin, leftMargin, GREY, GREY_LIGHT, scaleMode });
   if (minTime !== null && maxTime !== null) {
+      // X-axis (time) remains linear regardless of Y-axis scale
       drawXAxisTicks({ svg, svgNS, minTime, maxTime, width, height, leftMargin, rightMargin, bottomMargin, GREY, GREY_LIGHT });
   }
 
@@ -223,6 +243,7 @@ export function renderTimeSeriesChart(
             cutoffTimeMs: options?.cutoffTimeMs,
             startRadius,
             endRadius,
+            scaleMode: scaleMode // Pass scaleMode
         });
     }
   });

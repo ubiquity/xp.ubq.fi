@@ -175,3 +175,9 @@ input#time-range {
 .dev-mode-message > div {
   text-align: center;
 }
+
+
+text {
+    user-select: none;
+    pointer-events: none;
+}
