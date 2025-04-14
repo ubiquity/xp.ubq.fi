@@ -4,3 +4,59 @@ body{ background-color: #000;}
 select {
     background-color: transparent;
 }
+
+.xp-analytics-root {
+  width: 800px;
+  margin: 32px auto;
+  background: #181a1b;
+  border-radius: 8px;
+  box-shadow: 0 0 16px #0004;
+  padding: 32px;
+}
+.xp-analytics-header {
+  margin-bottom: 32px;
+}
+.xp-analytics-header-row {
+  display: flex;
+  gap: 32px;
+  align-items: center;
+}
+.xp-analytics-label {
+  font-size: 16px;
+  color: #ccc;
+  min-width: 120px;
+}
+.xp-analytics-select {
+  font-size: 16px;
+  padding: 4px 8px;
+  min-width: 160px;
+}
+.xp-analytics-view-toggle {
+  margin-left: 32px;
+  font-size: 16px;
+  padding: 4px 16px;
+  border-radius: 4px;
+  border: none;
+  background: #222;
+  color: #00e0ff;
+  cursor: pointer;
+}
+.xp-analytics-flex-spacer {
+  flex: 1;
+}
+.xp-analytics-time-range-label {
+  font-size: 16px;
+  color: #ccc;
+  min-width: 120px;
+}
+.xp-analytics-time-range-input {
+  width: 160px;
+}
+.xp-analytics-chart-area {
+  width: 100%;
+  min-height: 320px;
+  background: #111;
+  border-radius: 4px;
+  padding: 16px;
+  box-sizing: border-box;
+}
