@@ -25,7 +25,7 @@ async function commitAndPush() {
   const time = getTimeString();
   try {
     await run("git", ["add", "-A"]);
-    await run("git", ["commit", "-m", `auto-commit: ${time}`]);
+    await run("git", ["commit", "-m", `chore: auto commit ${time}`]);
     await run("git", ["push"]);
     lastCommitTime = Date.now();
     console.log(`[auto-commit-watch] Committed and pushed at ${time}`);
