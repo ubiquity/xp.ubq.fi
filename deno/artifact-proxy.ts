@@ -2,10 +2,10 @@
 
 // Deno Deploy serverless proxy for artifact API
 // Deploy this file to Deno Deploy. It proxies artifact list and download requests to GitHub.
-// Required environment variables: GITHUB_APP_ID, APP_INSTALLATION_ID, APP_PRIVATE_KEY, ORG, REPO
+// Required environment variables: APP_ID, APP_INSTALLATION_ID, APP_PRIVATE_KEY, ORG, REPO
 
 // Configuration
-const GITHUB_APP_ID = Deno.env.get("GITHUB_APP_ID");
+const APP_ID = Deno.env.get("APP_ID");
 const APP_INSTALLATION_ID = Deno.env.get("APP_INSTALLATION_ID");
 const APP_PRIVATE_KEY = Deno.env.get("APP_PRIVATE_KEY");
 const ORG = Deno.env.get("ORG");
@@ -66,8 +66,8 @@ function jsonResponse(data: unknown, status = 200) {
 
 // GitHub App Auth helpers
 async function getInstallationToken(): Promise<string> {
-  if (!GITHUB_APP_ID || !APP_INSTALLATION_ID || !APP_PRIVATE_KEY) {
-    throw new Error("GITHUB_APP_ID, APP_INSTALLATION_ID, and APP_PRIVATE_KEY must be set");
+  if (!APP_ID || !APP_INSTALLATION_ID || !APP_PRIVATE_KEY) {
+    throw new Error("APP_ID, APP_INSTALLATION_ID, and APP_PRIVATE_KEY must be set");
   }
 
   // 1. Generate JWT for GitHub App
@@ -75,7 +75,7 @@ async function getInstallationToken(): Promise<string> {
   const payload = {
     iat: now - 60,
     exp: now + (10 * 60),
-    iss: GITHUB_APP_ID,
+    iss: APP_ID,
   };
 
   // Deno Deploy supports crypto.subtle for signing

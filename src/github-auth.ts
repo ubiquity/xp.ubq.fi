@@ -4,7 +4,7 @@ let cachedToken: string | undefined;
 let tokenExpiry = 0;
 
 export async function getInstallationToken(): Promise<string> {
-  const appId = Bun.env.GITHUB_APP_ID;
+  const appId = Bun.env.APP_ID;
   const installationId = Bun.env.APP_INSTALLATION_ID;
   const privateKey = Bun.env.APP_PRIVATE_KEY;
 
