@@ -2,10 +2,12 @@
 
 // Deno Deploy serverless proxy for artifact API
 // Deploy this file to Deno Deploy. It proxies artifact list and download requests to GitHub.
-// Required environment variables: GITHUB_TOKEN, ORG, REPO
+// Required environment variables: GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID, GITHUB_APP_PRIVATE_KEY, ORG, REPO
 
 // Configuration
-const GITHUB_TOKEN = Deno.env.get("GITHUB_TOKEN");
+const GITHUB_APP_ID = Deno.env.get("GITHUB_APP_ID");
+const GITHUB_APP_INSTALLATION_ID = Deno.env.get("GITHUB_APP_INSTALLATION_ID");
+const GITHUB_APP_PRIVATE_KEY = Deno.env.get("GITHUB_APP_PRIVATE_KEY");
 const ORG = Deno.env.get("ORG");
 const REPO = Deno.env.get("REPO");
 const DEBUG = Deno.env.get("DEBUG") === "true";
@@ -62,25 +64,84 @@ function jsonResponse(data: unknown, status = 200) {
   });
 }
 
+// GitHub App Auth helpers
+async function getInstallationToken(): Promise<string> {
+  if (!GITHUB_APP_ID || !GITHUB_APP_INSTALLATION_ID || !GITHUB_APP_PRIVATE_KEY) {
+    throw new Error("GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID, and GITHUB_APP_PRIVATE_KEY must be set");
+  }
+
+  // 1. Generate JWT for GitHub App
+  const now = Math.floor(Date.now() / 1000);
+  const payload = {
+    iat: now - 60,
+    exp: now + (10 * 60),
+    iss: GITHUB_APP_ID,
+  };
+
+  // Deno Deploy supports crypto.subtle for signing
+  const privateKeyPEM = GITHUB_APP_PRIVATE_KEY.replace(/\\n/g, "\n");
+  const key = await crypto.subtle.importKey(
+    "pkcs8",
+    pemToArrayBuffer(privateKeyPEM),
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+
+  const header = { alg: "RS256", typ: "JWT" };
+  const enc = (obj: object) => btoa(JSON.stringify(obj)).replace(/=+$/, "").replace(/\+/g, "-").replace(/\//g, "_");
+  const headerB64 = enc(header);
+  const payloadB64 = enc(payload);
+  const toSign = new TextEncoder().encode(`${headerB64}.${payloadB64}`);
+  const signature = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", key, toSign);
+  const signatureB64 = btoa(String.fromCharCode(...new Uint8Array(signature))).replace(/=+$/, "").replace(/\+/g, "-").replace(/\//g, "_");
+  const jwt = `${headerB64}.${payloadB64}.${signatureB64}`;
+
+  // 2. Exchange JWT for installation access token
+  const url = `https://api.github.com/app/installations/${GITHUB_APP_INSTALLATION_ID}/access_tokens`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Accept: "application/vnd.github+json",
+      Authorization: `Bearer ${jwt}`,
+    },
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Failed to get installation token: ${res.status} ${res.statusText} - ${text}`);
+  }
+  const data = await res.json();
+  return data.token;
+}
+
+// PEM to ArrayBuffer helper
+function pemToArrayBuffer(pem: string): ArrayBuffer {
+  const b64 = pem.replace(/-----[^-]+-----/g, "").replace(/\s+/g, "");
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
+
 // GitHub API helper
 async function fetchArtifactsListFromGitHub(runId: string) {
   startTimer("fetchArtifactsList");
   log("API", `Fetching artifacts for run ID: ${runId}`, colors.blue);
 
-  if (!GITHUB_TOKEN) {
-    throw new Error("GITHUB_TOKEN environment variable is not set");
-  }
   if (!ORG || !REPO) {
     throw new Error("ORG and REPO environment variables must be set");
   }
 
+  const token = await getInstallationToken();
   const url = `https://api.github.com/repos/${ORG}/${REPO}/actions/runs/${runId}/artifacts`;
   log("API", `Fetching from URL: ${url}`, colors.blue);
 
   const res = await fetch(url, {
     headers: {
       Accept: "application/vnd.github+json",
-      Authorization: `Bearer ${GITHUB_TOKEN}`,
+      Authorization: `Bearer ${token}`,
     },
   });
 
@@ -205,18 +266,19 @@ Deno.serve(async (req: Request) => {
           return jsonResponse({ error: `Test fixture not found: ${artifactId}.zip` }, 404);
         }
       } else {
-        // Proxy to GitHub
-        if (!GITHUB_TOKEN) {
-          throw new Error("GITHUB_TOKEN environment variable is not set");
+        // Proxy to GitHub using App installation token
+        if (!ORG || !REPO) {
+          throw new Error("ORG and REPO environment variables must be set");
         }
 
         log("ZIP", `Fetching from GitHub API: ${artifactId}`, colors.blue);
         const artifactUrl = `https://api.github.com/repos/${ORG}/${REPO}/actions/artifacts/${artifactId}/zip`;
 
+        const token = await getInstallationToken();
         const ghRes = await fetch(artifactUrl, {
           headers: {
             Accept: "application/vnd.github+json",
-            Authorization: `Bearer ${GITHUB_TOKEN}`,
+            Authorization: `Bearer ${token}`,
           },
         });
 
