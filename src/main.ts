@@ -65,7 +65,6 @@ async function init() {
           : leaderboardData.filter((entry) => entry.contributor === selectedContributor);
 
         renderLeaderboardChart(filtered, chartArea, {
-          // width: 720,
           height: Math.max(200, filtered.length * 32 + 64),
           highlightContributor: selectedContributor !== "All" ? selectedContributor : leaderboardData[0]?.contributor,
         });
