@@ -35,6 +35,13 @@ jobs:
           cp src/style.css dist/
           # Add more static assets here if needed
 
+      - name: List dist directory contents
+        run: |
+          echo "Contents of dist/:"
+          ls -l dist
+          echo "Contents of project root:"
+          ls -l
+
       - name: Set Deno Deploy project name
         id: project_name
         run: |
