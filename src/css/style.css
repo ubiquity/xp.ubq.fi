@@ -1,6 +1,7 @@
  * {
   color: #fff;
   font-family: monospace, sans-serif;
+  text-rendering: geometricPrecision;
 }
 
 body {
@@ -27,18 +28,18 @@ select {
 }
 
 .xp-analytics-org-avatar {
-  height: 48px; /* Adjust size as needed */
-  width: 48px;
+  height: 36px; /* Adjust size as needed */
+  width: 36px;
   border-radius: 4px; /* Optional: rounded corners */
-  /* margin-right: 8px; */ /* Space between avatar and text */
+  margin: auto 16px; /* Space between avatar and text */
   vertical-align: middle; /* Align with text */
 }
 
 .xp-analytics-context-label {
   color: #ccc; /* Match other labels */
-  font-size: 24px;
+  font-size: 20px;
   /* Add other styles as needed, e.g., margin-right */
-  margin-left: 16px;
+  /* margin-left: 20px; */
 }
 
 /* Container for the slider above the chart */
@@ -62,8 +63,8 @@ select {
 }
 .xp-analytics-select {
   font-size: 16px;
-  padding: 4px 8px;
-  min-width: 160px;
+  padding: 8px 16px;
+  /* min-width: 160px; */
 }
 .xp-analytics-view-toggle {
   margin-left: 32px;
@@ -79,9 +80,9 @@ select {
   flex: 1;
 }
 .xp-analytics-time-range-label {
-  font-size: 16px;
+  font-size: 12px;
   color: #ccc;
-  min-width: 120px;
+  /* min-width: 120px; */
   text-align: center; /* Center the date range text */
 }
 .xp-analytics-time-range-input {
@@ -91,7 +92,7 @@ select {
 .xp-analytics-chart-area {
   flex: 1;
   width: 100%;
-  background: #111;
+  /* background: #111; */
   border-radius: 4px;
   /* padding: 16px; */
   box-sizing: border-box;
@@ -105,8 +106,8 @@ svg {
 
 
 input#time-range {
-    color: #fff;
-    border-color: #fff;
+    /* color: #808080; */
+    /* border-color: #808080; */
     appearance: none;
     height: 2px;
 }

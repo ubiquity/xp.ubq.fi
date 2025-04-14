@@ -130,7 +130,7 @@ export class DevModeWidget extends HTMLElement {
       } else if (repo) {
         runDetail = repo;
       } else {
-        runDetail = "No inputs found";
+        runDetail = "⚠ Unknown Report";
         statusColor = "#ff6b6b";
       }
 

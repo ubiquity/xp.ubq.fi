@@ -7,7 +7,7 @@
   --chart-color-grey-dark: #222;
   --chart-color-grey: #888;
   --chart-color-grey-light: #ccc;
-  --chart-color-bg: #181a1b;
+  --chart-color-bg: transparent;
 }
 
 #xp-analytics-chart-area {
