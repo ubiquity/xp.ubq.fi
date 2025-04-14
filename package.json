@@ -3,7 +3,6 @@
   "version": "0.1.0",
   "scripts": {
     "build": "bun run tools/build.ts",
-    "watch": "bun run tools/watch.ts",
     "type-check": "tsc --noEmit --watch",
     "dev:server": "bun --hot run tools/server.ts",
     "dev:frontend": "run-p watch type-check",
