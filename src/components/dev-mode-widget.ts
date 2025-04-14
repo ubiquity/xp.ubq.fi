@@ -1,3 +1,9 @@
+import {
+  getRecentRuns,
+  getWorkflowInputs,
+  setRecentRuns,
+  setWorkflowInputs,
+} from "../db/recent-runs-cache";
 import { isProduction } from "../utils";
 
 export class DevModeWidget extends HTMLElement {
@@ -37,19 +43,35 @@ export class DevModeWidget extends HTMLElement {
   }
 
   private async loadWorkflowRuns() {
+    // 1. Try to load from cache and render instantly
+    let cachedRuns: any[] | null = null;
+    try {
+      cachedRuns = await getRecentRuns();
+    } catch (e) {
+      console.error("Error loading cached workflow runs:", e);
+    }
+    if (cachedRuns && Array.isArray(cachedRuns)) {
+      this.renderWorkflowRuns(cachedRuns, true);
+    } else {
+      // Show loading state if no cache
+      this.runsContainer.innerHTML = '<div class="dev-mode-widget__loading">Loading recent runs...</div>';
+    }
+
+    // 2. In parallel, fetch from API and update cache (do not re-render)
     try {
       const response = await fetch("/api/workflow-runs");
       if (!response.ok) throw new Error("Failed to fetch workflow runs");
-
       const data = await response.json();
-      this.renderWorkflowRuns(data.workflow_runs);
+      if (Array.isArray(data.workflow_runs)) {
+        await setRecentRuns(data.workflow_runs);
+      }
     } catch (error) {
-      console.error("Error loading workflow runs:", error);
-      this.runsContainer.innerHTML = '<div class="dev-mode-widget__error">Error loading workflow runs</div>';
+      console.error("Error fetching workflow runs from API:", error);
     }
   }
 
-  private async renderWorkflowRuns(runs: any[]) {
+  // isCacheOnly: true if rendering from cache, false if rendering from fresh API (should only be true in this widget)
+  private async renderWorkflowRuns(runs: any[], isCacheOnly = false) {
     this.runsContainer.innerHTML = "";
 
     if (!runs.length) {
@@ -59,29 +81,35 @@ export class DevModeWidget extends HTMLElement {
 
     for (const run of runs) {
       const runElement = document.createElement("div");
-      runElement.className = "workflow-run";
       runElement.className = `workflow-run${this.currentRunId === String(run.id) ? ' workflow-run--active' : ''}`;
 
       const timestamp = new Date(run.created_at).toLocaleString();
       let statusColor = "#63e6be"; // Default green
-      let runDetail = "Processing...";
+      let runDetail = "";
 
-      // Fetch workflow inputs from new API endpoint
-      let inputs: any = {};
+      // Try to get workflow inputs from cache first
+      let inputs: any = undefined;
       try {
-        const res = await fetch(`/api/workflow-inputs/${run.id}`);
-        if (res.ok) {
-          inputs = await res.json();
-        } else {
-          console.error(`Failed to fetch workflow inputs for run ${run.id}:`, await res.text());
+        inputs = await getWorkflowInputs(String(run.id));
+        if (typeof inputs === "undefined") {
+          // Not in cache, fetch from API and cache for next load
+          const res = await fetch(`/api/workflow-inputs/${run.id}`);
+          if (res.ok) {
+            inputs = await res.json();
+            await setWorkflowInputs(String(run.id), inputs);
+          } else {
+            // Cache null to avoid repeated fetches for missing inputs
+            await setWorkflowInputs(String(run.id), null);
+            inputs = null;
+            console.error(`Failed to fetch workflow inputs for run ${run.id}:`, await res.text());
+          }
         }
       } catch (e) {
-        console.error("Error fetching workflow inputs for run", run.id, e);
+        console.error("Error getting workflow inputs for run", run.id, e);
       }
-      console.log("Parsed workflow inputs for run", run.id, ":", inputs);
 
-      const organization = inputs.organization;
-      const repo = inputs.repo;
+      const organization = inputs?.organization;
+      const repo = inputs?.repo;
 
       if (organization && repo) {
         runDetail = `${organization}${repo ? `/${repo}` : ""}`;
@@ -103,14 +131,6 @@ export class DevModeWidget extends HTMLElement {
           ${runDetail}
         </div>
       `;
-
-      runElement.addEventListener("mouseover", () => {
-        // Hover state is handled by CSS
-      });
-
-      runElement.addEventListener("mouseout", () => {
-        // Background is handled by CSS classes
-      });
 
       runElement.addEventListener("click", () => {
         window.location.href = `/?run=${run.id}`;
