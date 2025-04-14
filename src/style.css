@@ -1,4 +1,4 @@
-*{color: #fff; font-family:sans-serif}
+*{color: #fff;font-family: monospace, sans-serif;}
 body{ background-color: #000;}
 
 select {
@@ -6,7 +6,7 @@ select {
 }
 
 .xp-analytics-root {
-  width: 800px;
+  /* width: 800px; */
   margin: 32px auto;
   background: #181a1b;
   border-radius: 8px;
@@ -59,4 +59,16 @@ select {
   border-radius: 4px;
   padding: 16px;
   box-sizing: border-box;
+}
+
+svg {
+  width: 100%;
+}
+
+
+input#time-range {
+    color: #fff;
+    border-color: #fff;
+    appearance: none;
+    height: 2px;
 }

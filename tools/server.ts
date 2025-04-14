@@ -274,8 +274,16 @@ const server = Bun.serve({
       // Unknown API route
       log("API", `Unknown API route: ${pathname}`, colors.red);
       return jsonResponse({ error: "API route not found" }, 404);
+    } else if (pathname.endsWith('.map')) {
+      // Source maps should 404 if not found
+      filePath = resolve(process.cwd(), "." + pathname);
     } else {
-      // SPA fallback
+      // Only use SPA fallback for navigation paths (no extension)
+      if (pathname.includes('.')) {
+        log("STATIC", `Not found: ${pathname}`, colors.red);
+        return new Response("404 Not Found", { status: 404 });
+      }
+      // SPA fallback for client-side routing
       filePath = resolve(process.cwd(), "src/index.html");
     }
 

@@ -43,7 +43,8 @@ export function renderLeaderboardChart(
   const BG = "#181a1b";
 
   // --- Config ---
-  const width = options?.width ?? 600;
+  // Responsive width: use container's width or fallback to 600
+  const width = options?.width ?? (container.clientWidth || container.getBoundingClientRect().width || 600);
   const height = options?.height ?? Math.max(200, data.length * 32 + 64);
   const barHeight = options?.barHeight ?? 24;
   const barGap = options?.barGap ?? 8;
@@ -65,7 +66,7 @@ export function renderLeaderboardChart(
   // SVG root
   const svgNS = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(svgNS, "svg");
-  svg.setAttribute("width", width.toString());
+  svg.setAttribute("width", "100%");
   svg.setAttribute("height", height.toString());
   svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
   svg.style.display = "block";
@@ -136,26 +137,44 @@ export function renderLeaderboardChart(
       }
     });
 
-    // Contributor label
+    // Contributor label (left, dynamically clamp to avoid overflow)
     const label = document.createElementNS(svgNS, "text");
-    label.setAttribute("x", (leftMargin - 8).toString());
-    label.setAttribute("y", (y + barHeight / 2 + 6).toString());
-    label.setAttribute("text-anchor", "end");
     label.setAttribute("font-size", "16");
     label.setAttribute("fill", isError ? BAD : isHighlight ? GOOD : GREY);
     label.setAttribute("font-weight", isHighlight ? "bold" : "normal");
+    label.setAttribute("text-anchor", "end");
     label.textContent = entry.contributor;
+    // Temporarily position off-screen to measure
+    label.setAttribute("x", "0");
+    label.setAttribute("y", "-9999");
     svg.appendChild(label);
+    // Measure text width
+    const labelWidth = label.getBBox().width;
+    // Clamp so label fits within left edge
+    const unclampedLabelX = leftMargin - 8;
+    const minLabelX = labelWidth + 4;
+    const labelX = Math.max(unclampedLabelX, minLabelX);
+    label.setAttribute("x", labelX.toString());
+    label.setAttribute("y", (y + barHeight / 2 + 6).toString());
 
-    // XP label
+    // XP label (right, dynamically clamp to avoid overflow)
     const xpLabel = document.createElementNS(svgNS, "text");
-    xpLabel.setAttribute("x", (x + 8).toString());
-    xpLabel.setAttribute("y", (y + barHeight / 2 + 6).toString());
-    xpLabel.setAttribute("text-anchor", "start");
     xpLabel.setAttribute("font-size", "14");
     xpLabel.setAttribute("fill", isError ? BAD : isHighlight ? GOOD : GREY_LIGHT);
+    xpLabel.setAttribute("text-anchor", "start");
     xpLabel.textContent = `${entry.totalXP.toFixed(2)} XP`;
+    // Temporarily position off-screen to measure
+    xpLabel.setAttribute("x", "0");
+    xpLabel.setAttribute("y", "-9999");
     svg.appendChild(xpLabel);
+    // Measure text width
+    const xpLabelWidth = xpLabel.getBBox().width;
+    // Clamp so label fits within right edge
+    const unclampedXpLabelX = x + 8;
+    const maxXpLabelX = width - rightMargin - xpLabelWidth;
+    const xpLabelX = Math.min(unclampedXpLabelX, maxXpLabelX);
+    xpLabel.setAttribute("x", xpLabelX.toString());
+    xpLabel.setAttribute("y", (y + barHeight / 2 + 6).toString());
   });
 
   // Y-axis title
@@ -179,21 +198,28 @@ export function renderLeaderboardChart(
   svg.appendChild(xTitle);
 
   // Legend (repo patterns)
+  // Responsive legend layout
+  const legendCount = allRepoKeys.length + (errorContributors.length > 0 ? 1 : 0);
+  const legendAreaWidth = width - leftMargin - rightMargin;
+  const legendSpacing = legendAreaWidth / Math.max(legendCount, 1);
+  const legendRectWidth = 24;
+  const legendRectHeight = 16;
+  const legendY = height - bottomMargin + 8;
+
   allRepoKeys.forEach((repo, i) => {
-    const lx = leftMargin + i * 96;
-    const ly = height - bottomMargin + 8;
+    const lx = leftMargin + i * legendSpacing;
     const legendRect = document.createElementNS(svgNS, "rect");
     legendRect.setAttribute("x", lx.toString());
-    legendRect.setAttribute("y", ly.toString());
-    legendRect.setAttribute("width", "24");
-    legendRect.setAttribute("height", "16");
+    legendRect.setAttribute("y", legendY.toString());
+    legendRect.setAttribute("width", legendRectWidth.toString());
+    legendRect.setAttribute("height", legendRectHeight.toString());
     legendRect.setAttribute("fill", i === 0 ? GOOD : `url(#repo-pattern-${i})`);
     legendRect.setAttribute("opacity", i === 0 ? "0.7" : "1");
     svg.appendChild(legendRect);
 
     const legendLabel = document.createElementNS(svgNS, "text");
-    legendLabel.setAttribute("x", (lx + 32).toString());
-    legendLabel.setAttribute("y", (ly + 14).toString());
+    legendLabel.setAttribute("x", (lx + legendRectWidth + 8).toString());
+    legendLabel.setAttribute("y", (legendY + legendRectHeight - 2).toString());
     legendLabel.setAttribute("font-size", "12");
     legendLabel.setAttribute("fill", GREY);
     legendLabel.textContent = repo;
@@ -202,20 +228,19 @@ export function renderLeaderboardChart(
 
   // Error legend (if any)
   if (errorContributors.length > 0) {
-    const lx = leftMargin + allRepoKeys.length * 96;
-    const ly = height - bottomMargin + 8;
+    const lx = leftMargin + allRepoKeys.length * legendSpacing;
     const errorRect = document.createElementNS(svgNS, "rect");
     errorRect.setAttribute("x", lx.toString());
-    errorRect.setAttribute("y", ly.toString());
-    errorRect.setAttribute("width", "24");
-    errorRect.setAttribute("height", "16");
+    errorRect.setAttribute("y", legendY.toString());
+    errorRect.setAttribute("width", legendRectWidth.toString());
+    errorRect.setAttribute("height", legendRectHeight.toString());
     errorRect.setAttribute("fill", BAD);
     errorRect.setAttribute("opacity", "0.85");
     svg.appendChild(errorRect);
 
     const errorLabel = document.createElementNS(svgNS, "text");
-    errorLabel.setAttribute("x", (lx + 32).toString());
-    errorLabel.setAttribute("y", (ly + 14).toString());
+    errorLabel.setAttribute("x", (lx + legendRectWidth + 8).toString());
+    errorLabel.setAttribute("y", (legendY + legendRectHeight - 2).toString());
     errorLabel.setAttribute("font-size", "12");
     errorLabel.setAttribute("fill", BAD);
     errorLabel.textContent = "Error/Flagged";

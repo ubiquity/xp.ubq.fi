@@ -53,6 +53,9 @@ async function init() {
     // --- Render function ---
     function render() {
       chartArea.innerHTML = "";
+      const timeRangeLabel = document.getElementById("time-range-label") as HTMLSpanElement;
+      let timeRangeText = "";
+
       if (viewMode === "leaderboard") {
         // Filter leaderboard data by contributor if not "All"
         const filtered = selectedContributor === "All"
@@ -60,10 +63,11 @@ async function init() {
           : leaderboardData.filter((entry) => entry.contributor === selectedContributor);
 
         renderLeaderboardChart(filtered, chartArea, {
-          width: 720,
+          // width: 720,
           height: Math.max(200, filtered.length * 32 + 64),
           highlightContributor: selectedContributor !== "All" ? selectedContributor : leaderboardData[0]?.contributor,
         });
+        timeRangeText = "";
       } else {
         // Filter time series data by contributor if not "All"
         let filtered = selectedContributor === "All"
@@ -82,10 +86,32 @@ async function init() {
         }
 
         renderTimeSeriesChart(filtered, chartArea, {
-          width: 720,
+          // width: 720,
           height: 320,
           highlightContributor: selectedContributor !== "All" ? selectedContributor : timeSeriesData[0]?.contributor,
         });
+
+        // --- Human-readable time range label ---
+        // Find min and max timestamps in the filtered data
+        const allTimestamps: number[] = [];
+        filtered.forEach(entry => {
+          entry.series.forEach(pt => {
+            allTimestamps.push(new Date(pt.time).getTime());
+          });
+        });
+        if (allTimestamps.length > 0) {
+          const min = Math.min(...allTimestamps);
+          const max = Math.max(...allTimestamps);
+          const format = (d: Date) =>
+            `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+          timeRangeText = `${format(new Date(min))} — ${format(new Date(max))}`;
+        } else {
+          timeRangeText = "";
+        }
+      }
+      // Update time range label
+      if (timeRangeLabel) {
+        timeRangeLabel.textContent = timeRangeText;
       }
       // Update toggle button label
       viewToggle.textContent = viewMode === "leaderboard" ? "Leaderboard" : "Time Series";
