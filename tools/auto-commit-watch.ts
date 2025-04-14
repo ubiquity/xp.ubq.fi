@@ -1,5 +1,5 @@
-import { spawn } from "node:child_process";
 import chokidar from "chokidar";
+import { spawn } from "node:child_process";
 
 // Debounce time in ms
 const DEBOUNCE_MS = 1000;
@@ -13,9 +13,16 @@ function getTimeString() {
 
 function run(cmd: string, args: string[]) {
   return new Promise<void>((resolve, reject) => {
-    const proc = spawn(cmd, args, { stdio: "inherit" });
+    let stderr = "";
+    const proc = spawn(cmd, args, { stdio: ["inherit", "inherit", "pipe"] });
+    if (proc.stderr) {
+      proc.stderr.on("data", (data) => {
+        stderr += data.toString();
+      });
+    }
     proc.on("close", code => {
       if (code === 0) resolve();
+      else if (stderr.includes("nothing to commit")) resolve();
       else reject(new Error(`${cmd} ${args.join(" ")} failed with code ${code}`));
     });
   });
