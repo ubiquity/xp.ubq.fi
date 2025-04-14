@@ -116,7 +116,7 @@ select {
   min-width: 0; /* Allow chart area to shrink */
 }
 
-.main-content > dev-mode-widget {
+.main-content > recent-runs-widget { /* Updated tag name */
   flex: 0 0 320px; /* Sidebar fixed width, don't grow or shrink */
   overflow-y: auto; /* Allow sidebar content to scroll if needed */
   border-left: 1px solid #222; /* Optional separator */

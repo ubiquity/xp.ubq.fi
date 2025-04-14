@@ -72,18 +72,8 @@ export function renderTimeSeriesChart(
   const tempSvg = document.createElementNS(svgNS, "svg");
   tempSvg.style.visibility = "hidden";
   document.body.appendChild(tempSvg);
-  let maxContributorWidth = 0;
-  data.forEach(entry => {
-    const label = document.createElementNS(svgNS, "text");
-    label.setAttribute("font-size", "14");
-    label.textContent = entry.contributor;
-    tempSvg.appendChild(label);
-    const labelWidth = label.getBBox().width;
-    maxContributorWidth = Math.max(maxContributorWidth, labelWidth);
-  });
-  // Keep tempSvg attached for Y-axis label measurement
 
-  // --- Axis Scaling ---
+  // --- Axis Scaling (Calculate maxXP first, needed for margin calc) ---
   const minTime = options?.minTime ?? Math.min(Date.now(), ...data.flatMap(entry => entry.series.map(pt => new Date(pt.time).getTime())));
   const maxTime = options?.maxTime ?? Math.max(Date.now(), ...data.flatMap(entry => entry.series.map(pt => new Date(pt.time).getTime())));
 
@@ -101,7 +91,24 @@ export function renderTimeSeriesChart(
   // Use provided maxYValue if available, otherwise use calculated max, ensuring it's at least 1 for scaling purposes.
   const maxXP = options?.maxYValue ?? Math.max(1, calculatedMaxXP);
 
-  // Measure widest Y-axis label
+
+  // --- Dynamic Margin Calculation ---
+  // Measure widest contributor label (including potential rank prefix)
+  let maxContributorLabelWidth = 0;
+  // Find the contributor with the longest name to estimate max width
+  // This is an approximation, assumes rank prefix doesn't drastically change the longest name
+  const longestContributor = data.reduce((longest, current) =>
+      current.contributor.length > longest.length ? current.contributor : longest, ""
+  );
+  // Assume max rank could be 3 digits for width calculation (#100 )
+  const potentialLabelText = `#999 ${longestContributor}`;
+  const contributorLabel = document.createElementNS(svgNS, "text");
+  contributorLabel.setAttribute("font-size", "14"); // Match label font size
+  contributorLabel.textContent = potentialLabelText;
+  tempSvg.appendChild(contributorLabel);
+  maxContributorLabelWidth = contributorLabel.getBBox().width;
+
+  // Measure widest Y-axis label (using the already calculated maxXP)
   let maxYAxisLabelWidth = 0;
   const maxYLabelText = maxXP >= 1000 ? `${Math.ceil(maxXP / 1000)}k` : Math.ceil(maxXP).toString(); // Format the max value as it would appear
   const yLabel = document.createElementNS(svgNS, "text");
@@ -113,11 +120,11 @@ export function renderTimeSeriesChart(
   // Clean up temp SVG
   document.body.removeChild(tempSvg);
 
-  // Calculate dynamic margins
+  // Calculate dynamic margins (using correctly scoped variables)
   const yAxisPadding = 16; // Space for tick mark (4px) + label padding (8px) + buffer (4px)
   const requiredLeftMargin = maxYAxisLabelWidth + yAxisPadding;
   const leftMargin = Math.max(options?.leftMargin ?? 0, 64, requiredLeftMargin); // Ensure minimum 64px or calculated space
-  const rightMargin = options?.rightMargin ?? Math.max(32, maxContributorWidth + 32); // Keep existing right margin logic
+  const rightMargin = options?.rightMargin ?? Math.max(32, maxContributorLabelWidth + 16); // Use measured width + padding
   const topMargin = options?.topMargin ?? 32;
   const bottomMargin = options?.bottomMargin ?? 48;
   const highlightContributor = options?.highlightContributor ?? data[0]?.contributor;

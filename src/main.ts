@@ -1,4 +1,4 @@
-import "./components/dev-mode-widget";
+import "./components/recent-runs-widget"; // Updated import
 import type { LeaderboardEntry, TimeSeriesEntry } from "./data-transform";
 import { cubicBezier, getRunIdFromQuery, isProduction } from "./utils";
 import { renderLeaderboardChart } from "./visualization/leaderboard-chart";
@@ -77,6 +77,7 @@ async function init() {
         renderLeaderboardChart(filtered, chartArea, {
           // Let leaderboard determine its own height based on entries
           highlightContributor: selectedContributor !== "All" ? selectedContributor : leaderboardData[0]?.contributor,
+          ranks: ranks, // Pass the ranks object
         });
         timeRangeText = ""; // No time range label for leaderboard
       } else {

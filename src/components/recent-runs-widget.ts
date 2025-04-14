@@ -6,17 +6,19 @@ import {
 } from "../db/recent-runs-cache";
 import { isProduction } from "../utils";
 
-export class DevModeWidget extends HTMLElement {
+// Renamed class
+export class RecentRunsWidget extends HTMLElement {
   private container!: HTMLDivElement;
   private runsContainer!: HTMLDivElement;
   private currentRunId: string | null = null;
 
   constructor() {
     super();
-    if (isProduction()) return;
+    // Removed isProduction check as it's always shown now
+    // if (isProduction()) return;
 
     this.container = document.createElement("div");
-    this.container.className = "dev-mode-widget";
+    this.container.className = "recent-runs-widget"; // Updated class name
 
     this.runsContainer = document.createElement("div");
     this.container.appendChild(this.runsContainer);
@@ -24,20 +26,20 @@ export class DevModeWidget extends HTMLElement {
     // Add title
     const title = document.createElement("div");
     title.textContent = "Recent Reports";
-    title.className = "dev-mode-widget__title";
+    title.className = "recent-runs-widget__title"; // Updated class name
     this.container.insertBefore(title, this.runsContainer);
 
     this.loadWorkflowRuns();
   }
 
   connectedCallback() {
-    if (!isProduction()) {
-      this.appendChild(this.container);
-    }
+    // Removed isProduction check
+    this.appendChild(this.container);
   }
 
   disconnectedCallback() {
-    if (!isProduction() && this.container.parentNode) {
+    // Removed isProduction check
+    if (this.container.parentNode) {
       this.container.parentNode.removeChild(this.container);
     }
   }
@@ -54,7 +56,7 @@ export class DevModeWidget extends HTMLElement {
       this.renderWorkflowRuns(cachedRuns, true);
     } else {
       // Show loading state if no cache
-      this.runsContainer.innerHTML = '<div class="dev-mode-widget__loading">Loading recent reports...</div>';
+      this.runsContainer.innerHTML = '<div class="recent-runs-widget__loading">Loading recent reports...</div>'; // Updated class name
     }
 
     // 2. In parallel, fetch from API and update cache (do not re-render)
@@ -77,15 +79,16 @@ export class DevModeWidget extends HTMLElement {
     let numToDisplay = 10; // Default fallback
 
     // Ensure container is in the DOM and has height before calculating
-    if (this.runsContainer.offsetHeight > 0) {
-        const availableHeight = this.runsContainer.offsetHeight;
+    // Use `this.offsetHeight` as the container might not be fully rendered yet
+    if (this.offsetHeight > 0) {
+        const availableHeight = this.offsetHeight - 40; // Subtract approx title height + padding
         numToDisplay = Math.max(1, Math.floor(availableHeight / itemHeight));
-        console.log(`DevWidget: Height=${availableHeight}, ItemHeight=${itemHeight}, Displaying=${numToDisplay}`); // Optional debug log
+        // console.log(`RecentRunsWidget: Height=${availableHeight}, ItemHeight=${itemHeight}, Displaying=${numToDisplay}`); // Optional debug log
     } else {
         // If container height isn't available yet (e.g., initial render before layout),
         // maybe try getting height from `this` (the custom element) or defer calculation slightly.
         // For now, we'll stick to the default if container height is 0.
-        console.log(`DevWidget: Container height 0, using default ${numToDisplay}`);
+        // console.log(`RecentRunsWidget: Container height 0, using default ${numToDisplay}`);
     }
     // --- End Calculation ---
 
@@ -94,7 +97,7 @@ export class DevModeWidget extends HTMLElement {
     const runsToRender = runs.slice(0, numToDisplay); // Slice the array
 
     if (!runsToRender.length) {
-      this.runsContainer.innerHTML = '<div class="dev-mode-widget__error">No workflow runs found</div>';
+      this.runsContainer.innerHTML = '<div class="recent-runs-widget__error">No workflow runs found</div>'; // Updated class name
       return;
     }
 
@@ -172,4 +175,5 @@ export class DevModeWidget extends HTMLElement {
   }
 }
 
-customElements.define("dev-mode-widget", DevModeWidget);
+// Updated custom element definition
+customElements.define("recent-runs-widget", RecentRunsWidget);

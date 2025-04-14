@@ -160,13 +160,16 @@ export function drawContributorLine({
     // Label should only appear if there are points *rendered* for the line
     if (linePoints.length > 0) {
         const label = document.createElementNS(svgNS, "text");
-        label.setAttribute("font-size", "14");
-        label.setAttribute("fill", isError ? BAD : GOOD);
-        label.setAttribute("opacity", finalLineOpacity.toString());
-        label.setAttribute("text-anchor", "start");
-        label.textContent = entry.contributor;
+    label.setAttribute("font-size", "14");
+    label.setAttribute("fill", isError ? BAD : GOOD);
+    label.setAttribute("opacity", finalLineOpacity.toString());
+    label.setAttribute("text-anchor", "start");
+    // Add rank prefix if available
+    const rank = ranks ? ranks[entry.contributor] : undefined;
+    const rankPrefix = rank ? `#${rank} ` : "";
+    label.textContent = `${rankPrefix}${entry.contributor}`;
 
-        // Position label relative to the *last rendered point* on the line
+    // Position label relative to the *last rendered point* on the line
         const lastSvgPoint = linePoints[linePoints.length - 1];
         label.setAttribute("x", "0"); // Set initial position for bounding box calculation
         label.setAttribute("y", "-9999"); // Position off-screen initially

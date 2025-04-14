@@ -29,6 +29,7 @@ export function renderLeaderboardChart(
     repoKeys?: string[]; // Optional: consistent repo order
     highlightContributor?: string; // Optionally highlight a contributor
     errorContributors?: string[]; // Optionally mark contributors as "bad"
+    ranks?: { [contributor: string]: number }; // Add ranks option
   }
 ) {
   // Get CSS variables
@@ -55,12 +56,17 @@ export function renderLeaderboardChart(
   tempSvg.style.visibility = "hidden";
   document.body.appendChild(tempSvg);
 
-  // Measure contributor label widths
+  // Measure contributor label widths (including potential rank)
   let maxContributorWidth = 0;
+  const ranks = options?.ranks ?? {};
   data.forEach(entry => {
+    const rank = ranks[entry.contributor];
+    const rankPrefix = rank ? `#${rank} ` : ""; // Add "#rank " prefix if rank exists
+    const labelText = `${rankPrefix}${entry.contributor}`;
+
     const label = document.createElementNS(svgNS, "text");
     label.setAttribute("font-size", "16");
-    label.textContent = entry.contributor;
+    label.textContent = labelText; // Use text with prefix for measurement
     tempSvg.appendChild(label);
     const labelWidth = label.getBBox().width;
     maxContributorWidth = Math.max(maxContributorWidth, labelWidth);
@@ -226,7 +232,10 @@ export function renderLeaderboardChart(
     label.setAttribute("fill", isError ? BAD : isHighlight ? GOOD : GREY);
     label.setAttribute("font-weight", isHighlight ? "bold" : "normal");
     label.setAttribute("text-anchor", "end");
-    label.textContent = entry.contributor;
+    // Add rank prefix to the displayed label
+    const rank = ranks[entry.contributor];
+    const rankPrefix = rank ? `#${rank} ` : "";
+    label.textContent = `${rankPrefix}${entry.contributor}`;
     // Temporarily position off-screen to measure
     label.setAttribute("x", "0");
     label.setAttribute("y", "-9999");
@@ -261,25 +270,59 @@ export function renderLeaderboardChart(
 
   });
 
-  // Y-axis title
-  const yTitle = document.createElementNS(svgNS, "text");
-  yTitle.setAttribute("x", (leftMargin - 8).toString());
-  yTitle.setAttribute("y", (topMargin - 16).toString());
-  yTitle.setAttribute("text-anchor", "end");
-  yTitle.setAttribute("font-size", "14");
-  yTitle.setAttribute("fill", GREY_LIGHT);
-  yTitle.textContent = "Contributor";
-  svg.appendChild(yTitle);
+  // --- Removed Y-axis title ---
+  // const yTitle = document.createElementNS(svgNS, "text");
+  // yTitle.setAttribute("x", (leftMargin - 8).toString());
+  // yTitle.setAttribute("y", (topMargin - 16).toString());
+  // yTitle.setAttribute("text-anchor", "end");
+  // yTitle.setAttribute("font-size", "14");
+  // yTitle.setAttribute("fill", GREY_LIGHT);
+  // yTitle.textContent = "Contributor";
+  // svg.appendChild(yTitle);
 
-  // X-axis title
-  const xTitle = document.createElementNS(svgNS, "text");
-  xTitle.setAttribute("x", (width - rightMargin).toString());
-  xTitle.setAttribute("y", (height - bottomMargin + 24).toString());
-  xTitle.setAttribute("text-anchor", "end");
-  xTitle.setAttribute("font-size", "14");
-  xTitle.setAttribute("fill", GREY_LIGHT);
-  xTitle.textContent = "XP";
-  svg.appendChild(xTitle);
+  // --- Removed X-axis title ---
+  // const xTitle = document.createElementNS(svgNS, "text");
+  // xTitle.setAttribute("x", (width - rightMargin).toString());
+  // xTitle.setAttribute("y", (height - bottomMargin + 24).toString());
+  // xTitle.setAttribute("text-anchor", "end");
+  // xTitle.setAttribute("font-size", "14");
+  // xTitle.setAttribute("fill", GREY_LIGHT);
+  // xTitle.textContent = "XP";
+  // svg.appendChild(xTitle);
+
+  // --- Draw X-Axis Ticks (XP Scale) ---
+  const numSegments = 4; // 4 segments, 5 ticks
+  const chartWidth = width - leftMargin - rightMargin;
+  for (let i = 0; i <= numSegments; i++) {
+      const tickValue = (i / numSegments) * maxXP;
+      const x = leftMargin + (i / numSegments) * chartWidth;
+
+      // Draw tick mark
+      const tickMark = document.createElementNS(svgNS, "line");
+      tickMark.setAttribute("x1", x.toString());
+      tickMark.setAttribute("x2", x.toString());
+      tickMark.setAttribute("y1", (height - bottomMargin).toString());
+      tickMark.setAttribute("y2", (height - bottomMargin + 6).toString()); // Tick length
+      tickMark.setAttribute("stroke", GREY_LIGHT);
+      tickMark.setAttribute("stroke-width", "1");
+      svg.appendChild(tickMark);
+
+      // Draw tick label (Restored)
+      const tickLabel = document.createElementNS(svgNS, "text");
+      tickLabel.setAttribute("x", x.toString());
+      tickLabel.setAttribute("y", (height - bottomMargin + 20).toString()); // Position below tick
+      tickLabel.setAttribute("text-anchor", "middle");
+      tickLabel.setAttribute("font-size", "10");
+      tickLabel.setAttribute("fill", GREY_LIGHT);
+      // Format label (round to whole numbers)
+      if (tickValue >= 1000) {
+          tickLabel.textContent = Math.round(tickValue / 1000).toString() + 'k';
+      } else {
+          tickLabel.textContent = Math.round(tickValue).toString();
+      }
+      svg.appendChild(tickLabel);
+  }
+
 
   // Legend (repo patterns)
   // Responsive legend layout

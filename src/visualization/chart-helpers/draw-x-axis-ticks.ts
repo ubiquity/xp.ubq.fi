@@ -1,5 +1,6 @@
 /**
  * Draws the X-axis ticks and labels (Time Scale) for the time series chart.
+ * Uses weekly minor ticks and monthly major ticks with shorthand names.
  */
 interface DrawXAxisTicksOptions {
   svg: SVGSVGElement;
@@ -39,7 +40,9 @@ export function drawXAxisTicks({
 
   // Helper to calculate X position
   const getX = (timestamp: number): number => {
-    return leftMargin + ((timestamp - minTime) / timeRangeDuration) * chartWidth;
+    // Ensure timestamp is within bounds before calculating position
+    const clampedTimestamp = Math.max(minTime, Math.min(timestamp, maxTime));
+    return leftMargin + ((clampedTimestamp - minTime) / timeRangeDuration) * chartWidth;
   };
 
   // --- Weekly Ticks (Minor) ---
@@ -63,8 +66,13 @@ export function drawXAxisTicks({
       tickMark.setAttribute("stroke-width", "1");
       svg.appendChild(tickMark);
     }
-    // Move to the next week
-    currentWeek.setDate(currentWeek.getDate() + 7);
+    // Move to the next week, handle potential infinite loop if date setting fails (unlikely)
+    const currentDay = currentWeek.getDate();
+    currentWeek.setDate(currentDay + 7);
+    if (currentWeek.getDate() === currentDay) { // Safety break
+        console.warn("Potential infinite loop detected in weekly tick calculation.");
+        break;
+    }
   }
 
   // --- Monthly Ticks (Major) ---
@@ -85,18 +93,23 @@ export function drawXAxisTicks({
       tickMark.setAttribute("stroke-width", "1");
       svg.appendChild(tickMark);
 
-      // Month number label
+      // Month label
       const monthLabel = document.createElementNS(svgNS, "text");
       monthLabel.setAttribute("x", x.toString());
       monthLabel.setAttribute("y", (height - bottomMargin + 20).toString()); // Position below major tick
       monthLabel.setAttribute("text-anchor", "middle");
-              monthLabel.setAttribute("font-size", "10");
-              monthLabel.setAttribute("fill", GREY_LIGHT);
-              const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-              monthLabel.textContent = monthNames[currentMonth.getMonth()]; // Shorthand month name
-              svg.appendChild(monthLabel);
-          }
-    // Move to the next month
-    currentMonth.setMonth(currentMonth.getMonth() + 1);
+      monthLabel.setAttribute("font-size", "10");
+      monthLabel.setAttribute("fill", GREY_LIGHT);
+      const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      monthLabel.textContent = monthNames[currentMonth.getMonth()]; // Shorthand month name
+      svg.appendChild(monthLabel);
+    }
+    // Move to the next month, handle potential infinite loop
+    const currentMonthIndex = currentMonth.getMonth();
+    currentMonth.setMonth(currentMonthIndex + 1);
+     if (currentMonth.getMonth() === currentMonthIndex) { // Safety break for leap year/end-of-year issues
+        console.warn("Potential infinite loop detected in monthly tick calculation.");
+        break;
+    }
   }
 }
