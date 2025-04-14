@@ -243,7 +243,8 @@ export function getTimeSeriesData(
           }
 
           // Handle comment events
-          for (const comment of analytics.comments) {
+          const comments = Array.isArray(analytics.comments) ? analytics.comments : [];
+          for (const comment of comments) {
             const { timestamp, score, id } = comment;
 
             if (!timestamp || isNaN(new Date(timestamp).getTime())) {
