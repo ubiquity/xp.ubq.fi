@@ -25,6 +25,16 @@ select {
 .xp-analytics-header {
   padding: 16px;
 }
+
+/* Container for the slider above the chart */
+.xp-analytics-slider-container {
+  padding: 8px 16px; /* Add some padding */
+  display: flex;
+  flex-direction: column; /* Stack slider and label */
+  align-items: center; /* Center items */
+  gap: 4px; /* Space between slider and label */
+}
+
 .xp-analytics-header-row {
   display: flex;
   gap: 32px;
@@ -57,9 +67,11 @@ select {
   font-size: 16px;
   color: #ccc;
   min-width: 120px;
+  text-align: center; /* Center the date range text */
 }
 .xp-analytics-time-range-input {
-  width: 50vw;
+  width: 100%; /* Make slider full width */
+  box-sizing: border-box; /* Include padding/border in width */
 }
 .xp-analytics-chart-area {
   flex: 1;

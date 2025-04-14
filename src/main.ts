@@ -15,6 +15,8 @@ const progressText = document.createElement("div");
 progressText.className = "loading-overlay-progress";
 loadingOverlay.appendChild(progressText);
 
+const MS_PER_MINUTE = 60 * 1000;
+
 async function init() {
   try {
     // Initialize dev mode widget
@@ -43,13 +45,15 @@ async function init() {
     let timeSeriesData: TimeSeriesEntry[] = [];
     let viewMode: ViewMode = "leaderboard";
     let selectedContributor: string = "All";
-    let timeRangePercent: number = 100;
+    let currentTimeValue: number = 0; // Current slider value (minutes since epoch)
     let maxYValue: number = 1;
-    // let finalScores: { [contributor: string]: number } = {}; // Replaced by ranks
     let ranks: { [contributor: string]: number } = {};
     let highestScorer: string | null = null;
-    let globalMinTime: number | null = null;
-    let globalMaxTime: number | null = null;
+    let globalMinTimeMs: number | null = null; // In milliseconds
+    let globalMaxTimeMs: number | null = null; // In milliseconds
+    let globalMinTimeMins: number = 0; // In minutes since epoch
+    let globalMaxTimeMins: number = 0; // In minutes since epoch
+    let isAnimating: boolean = false; // Flag to control fade-in
 
     // --- UI Elements ---
     const root = document.getElementById("xp-analytics-root")!;
@@ -74,26 +78,26 @@ async function init() {
           height: Math.max(200, filtered.length * 32 + 64),
           highlightContributor: selectedContributor !== "All" ? selectedContributor : leaderboardData[0]?.contributor,
         });
-        timeRangeText = "";
+        timeRangeText = ""; // No time range label for leaderboard
       } else {
         // Filter time series data by contributor if not "All"
         let filtered = selectedContributor === "All"
           ? timeSeriesData
           : timeSeriesData.filter((entry) => entry.contributor === selectedContributor);
 
-        // Apply time range filter based on absolute time
-        if (filtered.length > 0 && timeRangePercent < 100 && globalMinTime !== null && globalMaxTime !== null) {
-          const timeRangeDuration = globalMaxTime - globalMinTime;
-          const cutoffTime = globalMinTime + timeRangeDuration * (timeRangePercent / 100);
+        // Apply time range filter based on absolute time (using currentTimeValue)
+        if (filtered.length > 0 && globalMinTimeMs !== null && globalMaxTimeMs !== null) {
+          const cutoffTimeMs = currentTimeValue * MS_PER_MINUTE; // Convert slider value (minutes) back to ms
 
           filtered = filtered.map((entry) => {
             // Filter points up to the cutoff time
-            const timeFilteredSeries = entry.series.filter(pt => new Date(pt.time).getTime() <= cutoffTime);
+            const timeFilteredSeries = entry.series.filter(pt => new Date(pt.time).getTime() <= cutoffTimeMs);
 
             // Ensure at least one point remains if original series had points and cutoffTime is past the first point's time
             if (entry.series.length > 0 && timeFilteredSeries.length === 0) {
                const firstPointTime = new Date(entry.series[0].time).getTime();
-               if (cutoffTime >= firstPointTime) {
+               if (cutoffTimeMs >= firstPointTime) {
+                 // If cutoff is past the first point, but no points are strictly <= cutoff, show just the first point
                  return { ...entry, series: entry.series.slice(0, 1) };
                } else {
                  // If cutoff is before the first point, return empty series for this entry
@@ -104,34 +108,30 @@ async function init() {
           }).filter(entry => entry.series.length > 0); // Remove entries with no points within the time range
         }
 
+        // Calculate animation progress only if animating
+        const animationProgress = isAnimating && globalMaxTimeMins > globalMinTimeMins
+          ? (currentTimeValue - globalMinTimeMins) / (globalMaxTimeMins - globalMinTimeMins)
+          : 1; // Default to 1 (no fade) if not animating or range is zero
+
         renderTimeSeriesChart(filtered, chartArea, {
-          // width: 720,
           height: 320,
-          highlightContributor: selectedContributor !== "All" ? selectedContributor : (highestScorer ?? undefined), // Use highest scorer if "All", pass undefined if null
+          highlightContributor: selectedContributor !== "All" ? selectedContributor : (highestScorer ?? undefined),
           maxYValue: maxYValue,
-          timeRangePercent: timeRangePercent,
-          ranks: ranks, // Pass ranks for opacity calculation
-          minTime: globalMinTime, // Pass fixed min time
-          maxTime: globalMaxTime, // Pass fixed max time
-          animationProgress: timeRangePercent / 100 // Pass animation progress (0-1)
+          ranks: ranks,
+          minTime: globalMinTimeMs, // Pass fixed min/max time in MS
+          maxTime: globalMaxTimeMs,
+          animationProgress: animationProgress // Pass animation progress (0-1)
         });
 
         // --- Human-readable time range label ---
-        // Find min and max timestamps in the filtered data
-        const allTimestamps: number[] = [];
-        filtered.forEach(entry => {
-          entry.series.forEach(pt => {
-            allTimestamps.push(new Date(pt.time).getTime());
-          });
-        });
-        if (allTimestamps.length > 0) {
-          const min = Math.min(...allTimestamps);
-          const max = Math.max(...allTimestamps);
-          const format = (d: Date) =>
-            `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-          timeRangeText = `${format(new Date(min))} — ${format(new Date(max))}`;
+        // Display current time based on slider value
+        if (globalMinTimeMs !== null) {
+           const currentDisplayTimeMs = currentTimeValue * MS_PER_MINUTE;
+           const format = (d: Date) =>
+             `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+           timeRangeText = `Up to: ${format(new Date(currentDisplayTimeMs))}`;
         } else {
-          timeRangeText = "";
+           timeRangeText = "";
         }
       }
       // Update time range label
@@ -143,42 +143,41 @@ async function init() {
     }
 
     function animateTimeline() {
+      isAnimating = true; // Start animation fade-in
       const startTime = performance.now();
       const duration = 2500; // 2.5 seconds
-
-      let animationComplete = false; // Flag to stop passing progress after animation
+      const startValue = globalMinTimeMins;
+      const endValue = globalMaxTimeMins;
+      const range = endValue - startValue;
 
       function animate(currentTime: number) {
-        if (animationComplete) return; // Stop animation loop if complete
-
         const elapsed = currentTime - startTime;
-        const progress = Math.min(elapsed / duration, 1);
+        let progress = Math.min(elapsed / duration, 1);
 
         // Apply ease-in-out easing (cubic-bezier(0.42, 0, 0.58, 1))
-        const eased = cubicBezier(0.42, 0, 0.58, 1, progress);
+        const easedProgress = cubicBezier(0.42, 0, 0.58, 1, progress);
 
-        timeRangePercent = eased * 100;
-        timeRange.value = String(Math.floor(timeRangePercent));
-        render(); // Render will now use timeRangePercent / 100 as animationProgress
+        currentTimeValue = startValue + range * easedProgress;
+        timeRange.value = String(currentTimeValue); // Update slider position
+        render();
 
         if (progress < 1) {
           requestAnimationFrame(animate);
+        } else {
+          isAnimating = false; // Animation finished, stop fade-in effect
+          // Ensure final state is exactly the max time
+          currentTimeValue = globalMaxTimeMins;
+          timeRange.value = String(currentTimeValue);
+          render(); // Final render at 100%
         }
       }
 
       requestAnimationFrame(animate);
-
-      // Set flag when animation should be done
-      setTimeout(() => {
-        animationComplete = true;
-        // Optional: Final render at 100% without animation progress
-        // timeRangePercent = 100;
-        // render();
-      }, duration);
     }
 
     // --- Initialize UI with data ---
     function initializeUI() {
+      // --- Contributor Select Dropdown ---
       const allContributors = Array.from(
         new Set([
           ...leaderboardData.map((entry) => entry.contributor),
@@ -197,8 +196,8 @@ async function init() {
         contributorSelect.appendChild(opt);
       });
 
-      // Calculate initial max Y value if not set
-      if (maxYValue === 1) {
+      // --- Calculate Max Y Value ---
+      if (maxYValue === 1) { // Only calculate once
         timeSeriesData.forEach(entry => {
           let cumulative = 0;
           entry.series.forEach(pt => {
@@ -208,66 +207,77 @@ async function init() {
         });
       }
 
-      // Calculate ranks based on leaderboard totalXP for consistency
+      // --- Calculate Ranks ---
       const scoresArray: [string, number][] = leaderboardData.map(entry => {
         return [entry.contributor, entry.totalXP];
       });
-
-      scoresArray.sort(([, scoreA], [, scoreB]) => scoreB - scoreA); // Sort descending by score
-
+      scoresArray.sort(([, scoreA], [, scoreB]) => scoreB - scoreA);
       ranks = {};
       highestScorer = scoresArray.length > 0 ? scoresArray[0][0] : null;
       scoresArray.forEach(([contributor], index) => {
-        ranks[contributor] = index + 1; // Rank starts at 1
+        ranks[contributor] = index + 1;
       });
 
-      // Calculate global time range from full dataset
+      // --- Calculate Global Time Range and Set Slider ---
       const allTimestampsFull: number[] = timeSeriesData.flatMap(entry =>
         entry.series.map(pt => new Date(pt.time).getTime())
       );
       if (allTimestampsFull.length > 0) {
-        globalMinTime = Math.min(...allTimestampsFull);
-        globalMaxTime = Math.max(...allTimestampsFull);
+        globalMinTimeMs = Math.min(...allTimestampsFull);
+        globalMaxTimeMs = Math.max(...allTimestampsFull);
+        globalMinTimeMins = Math.floor(globalMinTimeMs / MS_PER_MINUTE);
+        globalMaxTimeMins = Math.ceil(globalMaxTimeMs / MS_PER_MINUTE); // Use ceil for max to include the last minute
       } else {
-        globalMinTime = null;
-        globalMaxTime = null;
+        globalMinTimeMs = Date.now(); // Fallback if no data
+        globalMaxTimeMs = Date.now();
+        globalMinTimeMins = Math.floor(globalMinTimeMs / MS_PER_MINUTE);
+        globalMaxTimeMins = globalMinTimeMins;
       }
 
+      // Set slider attributes
+      timeRange.min = String(globalMinTimeMins);
+      timeRange.max = String(globalMaxTimeMins);
+      timeRange.value = String(globalMinTimeMins); // Start slider at the beginning
+      currentTimeValue = globalMinTimeMins; // Sync state
 
-      // Set to timeseries view and render
-      viewMode = "timeseries";
-      render();
+      // --- Initial Render & Animation ---
+      viewMode = "timeseries"; // Default to timeseries for animation
+      render(); // Initial render before animation starts
 
       // Store max height and fix it
       chartArea.style.height = `${chartArea.offsetHeight}px`;
 
-      // Start animation from beginning
-      timeRangePercent = 0;
-      timeRange.value = "0";
+      // Start animation
       animateTimeline();
     }
 
     // --- Event listeners ---
     contributorSelect.addEventListener("change", (e) => {
       selectedContributor = contributorSelect.value;
+      isAnimating = false; // Stop animation if user interacts
       render();
     });
 
     viewToggle.addEventListener("click", () => {
       viewMode = viewMode === "leaderboard" ? "timeseries" : "leaderboard";
+      isAnimating = false; // Stop animation if user interacts
+      // If switching back to timeseries, maybe restart animation or set to max?
+      // For now, just render current state
+      if (viewMode === 'timeseries') {
+         currentTimeValue = parseInt(timeRange.value, 10); // Sync state with slider
+      }
       render();
     });
 
     timeRange.addEventListener("input", () => {
-      timeRangePercent = parseInt(timeRange.value, 10);
+      isAnimating = false; // Stop animation if user interacts
+      currentTimeValue = parseInt(timeRange.value, 10);
       render();
     });
 
-    // Show loading overlay
+    // --- Load Data ---
     root.style.position = "relative";
     root.appendChild(loadingOverlay);
-
-    // --- Load Data ---
     await loadArtifactData(runId, {
       onProgress: (phase, percent, detail) => {
         progressText.textContent = `${phase}: ${Math.round(percent)}%${detail ? ` - ${detail}` : ""}`;
@@ -279,27 +289,18 @@ async function init() {
         progressText.classList.add("error");
       },
       onComplete: (data) => {
-        // Remove loading overlay
         loadingOverlay.remove();
-
-        // Update data
         leaderboardData = data.leaderboard;
         timeSeriesData = data.timeSeries;
 
-        // Make data available for debugging
         (window as any).analyticsData = data;
-        console.log(
-          "%c✨ Developer Note: Access all analytics data via window.analyticsData",
-          "color: #00e0ff; font-weight: bold;"
-        );
+        console.log("%c✨ Developer Note: Access all analytics data via window.analyticsData", "color: #00e0ff; font-weight: bold;");
         console.log("Leaderboard Data:", leaderboardData);
         console.log("Time Series Data:", timeSeriesData);
 
-        // Initialize UI with data
-        initializeUI();
+        initializeUI(); // Initialize after data is loaded
       }
     });
-
 
     // Clean up on unload
     window.addEventListener("unload", cleanupWorker);
