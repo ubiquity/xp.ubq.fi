@@ -121,23 +121,12 @@ export function renderLeaderboardChart(
   tooltip.style.zIndex = "1000";
   container.appendChild(tooltip);
 
-  // --- Color generation for issue segments ---
-  // Use a mix of colors to make segments more distinguishable
-  const colors = [
-    GOOD,
-    "#4CD2E4", // Lighter cyan
-    "#33B8CC", // Darker cyan
-    "#66DBEB", // Bright cyan
-    "#29A3B8", // Deep cyan
-  ];
-
-  // Create colors for each issue
-  const issueColors = Object.fromEntries(
-    allIssueKeys.map((issueKey, i) => [
-      issueKey,
-      colors[i % colors.length]
-    ])
-  );
+  // Sort issue keys by XP for each contributor
+  const sortIssuesByXP = (contributor: LeaderboardEntry) => {
+    return Object.entries(contributor.issueBreakdown)
+      .sort(([, xp1], [, xp2]) => xp2 - xp1) // Sort by XP descending
+      .map(([issueKey]) => issueKey);
+  };
 
   // --- Draw bars ---
   data.forEach((entry, idx) => {
@@ -148,8 +137,13 @@ export function renderLeaderboardChart(
     const isHighlight = entry.contributor === highlightContributor;
     const isError = errorContributors.includes(entry.contributor);
 
+    // Get sorted issues for this contributor
+    const contributorIssues = sortIssuesByXP(entry);
+    const totalIssues = contributorIssues.length;
+    const baseOpacity = 1 / totalIssues;
+
     // Draw stacked segments for each issue
-    allIssueKeys.forEach((issueKey) => {
+    contributorIssues.forEach((issueKey, position) => {
       const issueXP = entry.issueBreakdown[issueKey] ?? 0;
       if (issueXP > 0) {
         const barW = (issueXP / maxXP) * (width - leftMargin - rightMargin);
@@ -159,19 +153,19 @@ export function renderLeaderboardChart(
         rect.setAttribute("width", barW.toString());
         rect.setAttribute("height", barHeight.toString());
 
-        // Color logic
-        if (isError) {
-          rect.setAttribute("fill", BAD);
-          rect.setAttribute("opacity", "0.85");
-        } else {
-          const color = issueColors[issueKey];
-          rect.setAttribute("fill", color);
-          rect.setAttribute("opacity", isHighlight ? "1" : "0.7");
-        }
+        // Calculate opacity based on position
+        // Later positions (right side) get higher opacity
+        const segmentOpacity = baseOpacity * (position + 1);
+        const finalOpacity = isError ? 0.85 : (isHighlight ? Math.min(1, segmentOpacity * 1.3) : segmentOpacity);
+
+        // Use single color with calculated opacity
+        rect.setAttribute("fill", isError ? BAD : GOOD);
+        rect.setAttribute("opacity", finalOpacity.toString());
 
         // Store data for tooltip
         rect.setAttribute("data-issue", issueKey);
         rect.setAttribute("data-xp", issueXP.toString());
+        rect.setAttribute("data-base-opacity", baseOpacity.toString());
 
         // Add hover interactivity
         rect.addEventListener("mouseenter", (e) => {
@@ -203,7 +197,10 @@ export function renderLeaderboardChart(
 
         rect.addEventListener("mouseleave", (e) => {
           const target = e.target as SVGRectElement;
-          target.setAttribute("opacity", isHighlight ? "1" : "0.7");
+          const baseOpacity = parseFloat(target.getAttribute("data-base-opacity") || "1");
+          const position = contributorIssues.indexOf(target.getAttribute("data-issue") || "");
+          const restoreOpacity = baseOpacity * (position + 1);
+          target.setAttribute("opacity", isHighlight ? Math.min(1, restoreOpacity * 1.3).toString() : restoreOpacity.toString());
           tooltip.style.display = "none";
         });
 
@@ -275,52 +272,44 @@ export function renderLeaderboardChart(
 
   // Legend (repo patterns)
   // Responsive legend layout
-  // Create a scrollable legend container
+  // Create a simplified legend container
   const legendContainer = document.createElement("div");
   legendContainer.style.position = "absolute";
   legendContainer.style.left = `${leftMargin}px`;
   legendContainer.style.bottom = `${bottomMargin - 32}px`; // Position above the bottom margin
   legendContainer.style.width = `${width - leftMargin - rightMargin}px`;
-  legendContainer.style.height = "40px"; // Fixed height for scrolling
-  legendContainer.style.overflowX = "auto";
-  legendContainer.style.overflowY = "hidden";
-  legendContainer.style.whiteSpace = "nowrap";
+  legendContainer.style.height = "40px";
   legendContainer.style.backgroundColor = BG;
   container.appendChild(legendContainer);
 
-  // Add legend items to the scrollable container
-  allIssueKeys.forEach((issueKey) => {
-    const legendItem = document.createElement("div");
-    legendItem.style.display = "inline-block";
-    legendItem.style.marginRight = "16px";
+  // Add a single legend item with gradient
+  const legendItem = document.createElement("div");
+  legendItem.style.display = "inline-block";
+  legendItem.style.marginRight = "16px";
 
-    const color = issueColors[issueKey];
-    legendItem.innerHTML = `
-      <div style="display: inline-block; width: 24px; height: 16px; background: ${color}; opacity: 0.7; vertical-align: middle;"></div>
-      <span style="margin-left: 8px; color: ${GREY}; font-size: 12px; vertical-align: middle;">${issueKey}</span>
-    `;
+  const gradientBox = document.createElement("div");
+  gradientBox.style.display = "inline-block";
+  gradientBox.style.width = "80px";
+  gradientBox.style.height = "16px";
+  gradientBox.style.background = `linear-gradient(to right, ${GOOD}00, ${GOOD})`;
+  gradientBox.style.verticalAlign = "middle";
 
-    // Add hover interaction to highlight corresponding segments
-    legendItem.addEventListener("mouseenter", () => {
-      const segments = svg.querySelectorAll(`rect[data-issue="${issueKey}"]`);
-      segments.forEach(segment => segment.setAttribute("opacity", "1"));
-    });
+  const legendLabel = document.createElement("span");
+  legendLabel.style.marginLeft = "8px";
+  legendLabel.style.color = GREY;
+  legendLabel.style.fontSize = "12px";
+  legendLabel.style.verticalAlign = "middle";
+  legendLabel.textContent = "Issue XP Distribution";
 
-    legendItem.addEventListener("mouseleave", () => {
-      const segments = svg.querySelectorAll(`rect[data-issue="${issueKey}"]`);
-      segments.forEach(segment => {
-        const isHighlightSegment = segment.parentElement?.querySelector(`text[data-contributor="${highlightContributor}"]`) !== null;
-        segment.setAttribute("opacity", isHighlightSegment ? "1" : "0.7");
-      });
-    });
-
-    legendContainer.appendChild(legendItem);
-  });
+  legendItem.appendChild(gradientBox);
+  legendItem.appendChild(legendLabel);
+  legendContainer.appendChild(legendItem);
 
   // Add error legend if needed
   if (errorContributors.length > 0) {
     const errorItem = document.createElement("div");
     errorItem.style.display = "inline-block";
+    errorItem.style.marginLeft = "24px";
     errorItem.style.marginRight = "16px";
     errorItem.innerHTML = `
       <div style="display: inline-block; width: 24px; height: 16px; background: ${BAD}; opacity: 0.85; vertical-align: middle;"></div>
