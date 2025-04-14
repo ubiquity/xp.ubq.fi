@@ -85,30 +85,16 @@ async function init() {
           ? timeSeriesData
           : timeSeriesData.filter((entry) => entry.contributor === selectedContributor);
 
-        // Apply time range filter based on absolute time (using currentTimeValue)
-        if (filtered.length > 0 && globalMinTimeMs !== null && globalMaxTimeMs !== null) {
-          const cutoffTimeMs = currentTimeValue * MS_PER_MINUTE; // Convert slider value (minutes) back to ms
+        // Calculate cutoff time based on slider value, but don't filter data here
+        let cutoffTimeMs: number | undefined = undefined;
+        if (globalMinTimeMs !== null && globalMaxTimeMs !== null) {
+           cutoffTimeMs = currentTimeValue * MS_PER_MINUTE;
+           // Ensure cutoff doesn't exceed max time (can happen due to rounding/ceil)
+            cutoffTimeMs = Math.min(cutoffTimeMs, globalMaxTimeMs);
+         }
+         // Filtering is now handled within renderTimeSeriesChart based on cutoffTimeMs
 
-          filtered = filtered.map((entry) => {
-            // Filter points up to the cutoff time
-            const timeFilteredSeries = entry.series.filter(pt => new Date(pt.time).getTime() <= cutoffTimeMs);
-
-            // Ensure at least one point remains if original series had points and cutoffTime is past the first point's time
-            if (entry.series.length > 0 && timeFilteredSeries.length === 0) {
-               const firstPointTime = new Date(entry.series[0].time).getTime();
-               if (cutoffTimeMs >= firstPointTime) {
-                 // If cutoff is past the first point, but no points are strictly <= cutoff, show just the first point
-                 return { ...entry, series: entry.series.slice(0, 1) };
-               } else {
-                 // If cutoff is before the first point, return empty series for this entry
-                 return { ...entry, series: [] };
-               }
-            }
-            return { ...entry, series: timeFilteredSeries };
-          }).filter(entry => entry.series.length > 0); // Remove entries with no points within the time range
-        }
-
-        // Calculate animation progress only if animating
+         // Calculate animation progress only if animating
         const animationProgress = isAnimating && globalMaxTimeMins > globalMinTimeMins
           ? (currentTimeValue - globalMinTimeMins) / (globalMaxTimeMins - globalMinTimeMins)
           : 1; // Default to 1 (no fade) if not animating or range is zero
@@ -120,7 +106,8 @@ async function init() {
           ranks: ranks,
           minTime: globalMinTimeMs, // Pass fixed min/max time in MS
           maxTime: globalMaxTimeMs,
-          animationProgress: animationProgress // Pass animation progress (0-1)
+          animationProgress: animationProgress, // Pass animation progress (0-1)
+          cutoffTimeMs: cutoffTimeMs // Pass the calculated cutoff time
         });
 
         // --- Human-readable time range label ---

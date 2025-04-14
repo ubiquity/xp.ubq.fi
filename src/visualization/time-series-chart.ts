@@ -33,6 +33,7 @@ export function renderTimeSeriesChart(
     minTime?: number | null; // Optional fixed minimum time for X-axis
     maxTime?: number | null; // Optional fixed maximum time for X-axis
     animationProgress?: number; // Optional animation progress (0-1) for fade-in effect
+    cutoffTimeMs?: number; // Optional cutoff time for filtering/interpolation
   }
 ) {
   // Get CSS variables
@@ -110,6 +111,56 @@ export function renderTimeSeriesChart(
     };
   });
 
+  // Filter points based on cutoffTimeMs and interpolate the last segment
+  const finalContributorData = contributorData.map(entry => {
+    const allCalculatedPoints = entry.points; // These are already cumulative
+    let pointsToRender = allCalculatedPoints;
+
+    if (options?.cutoffTimeMs !== undefined && allCalculatedPoints.length > 0) {
+      // Find the index of the last point *at or before* the cutoff time
+      let lastVisibleIndex = -1;
+      for (let i = 0; i < allCalculatedPoints.length; i++) {
+        if (allCalculatedPoints[i].time <= options.cutoffTimeMs) {
+          lastVisibleIndex = i;
+        } else {
+          break; // Points are sorted by time
+        }
+      }
+
+      if (lastVisibleIndex === -1) {
+        // Cutoff is before the first point
+        pointsToRender = [];
+      } else {
+        // Take points up to the last visible one
+        pointsToRender = allCalculatedPoints.slice(0, lastVisibleIndex + 1);
+
+        // Check if interpolation is needed between lastVisibleIndex and the next point
+        const nextPoint = allCalculatedPoints[lastVisibleIndex + 1];
+        if (nextPoint && options.cutoffTimeMs > allCalculatedPoints[lastVisibleIndex].time) {
+           const prevPoint = allCalculatedPoints[lastVisibleIndex];
+           const timeDiff = nextPoint.time - prevPoint.time;
+           if (timeDiff > 0) { // Avoid division by zero
+             const fraction = (options.cutoffTimeMs - prevPoint.time) / timeDiff;
+             const interpolatedXP = prevPoint.xp + (nextPoint.xp - prevPoint.xp) * fraction;
+             pointsToRender.push({
+               time: options.cutoffTimeMs,
+               xp: interpolatedXP
+             });
+           }
+        }
+      }
+    }
+     // Ensure at least one point if original had points and cutoff is past first point
+     if (allCalculatedPoints.length > 0 && pointsToRender.length === 0 && options?.cutoffTimeMs && options.cutoffTimeMs >= allCalculatedPoints[0].time) {
+        pointsToRender = allCalculatedPoints.slice(0, 1);
+     }
+
+
+    return { ...entry, points: pointsToRender };
+
+  }).filter(entry => entry.points.length > 0); // Filter out contributors with no points in range
+
+
   // Find max XP (cumulative, across all contributors and all times) for Y-axis scaling
   let maxXP = options?.maxYValue ?? 1;
   if (!options?.maxYValue) {
@@ -146,7 +197,7 @@ export function renderTimeSeriesChart(
   }
 
   // Sort data to draw highlighted contributor last (on top)
-  const sortedContributorData = [...contributorData].sort((a, b) => {
+  const sortedContributorData = [...finalContributorData].sort((a, b) => {
     const aIsHighlight = a.contributor === highlightContributor;
     const bIsHighlight = b.contributor === highlightContributor;
     if (aIsHighlight && !bIsHighlight) return 1; // a comes after b
