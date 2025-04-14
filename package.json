@@ -9,7 +9,8 @@
     "dev:enhanced": "bun run tools/dev.ts",
     "dev:start-server": "bun --watch run tools/server.ts",
     "dev": "rm -rf dist && bun run tools/start-dev.ts",
-    "start": "bun run tools/server.ts"
+    "start": "bun run tools/server.ts",
+    "auto-commit": "bun run tools/auto-commit-watch.ts"
   },
   "devDependencies": {
     "@types/bun": "^1.2.9",
