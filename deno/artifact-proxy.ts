@@ -2,11 +2,11 @@
 
 // Deno Deploy serverless proxy for artifact API
 // Deploy this file to Deno Deploy. It proxies artifact list and download requests to GitHub.
-// Required environment variables: GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID, APP_PRIVATE_KEY, ORG, REPO
+// Required environment variables: GITHUB_APP_ID, APP_INSTALLATION_ID, APP_PRIVATE_KEY, ORG, REPO
 
 // Configuration
 const GITHUB_APP_ID = Deno.env.get("GITHUB_APP_ID");
-const GITHUB_APP_INSTALLATION_ID = Deno.env.get("GITHUB_APP_INSTALLATION_ID");
+const APP_INSTALLATION_ID = Deno.env.get("APP_INSTALLATION_ID");
 const APP_PRIVATE_KEY = Deno.env.get("APP_PRIVATE_KEY");
 const ORG = Deno.env.get("ORG");
 const REPO = Deno.env.get("REPO");
@@ -66,8 +66,8 @@ function jsonResponse(data: unknown, status = 200) {
 
 // GitHub App Auth helpers
 async function getInstallationToken(): Promise<string> {
-  if (!GITHUB_APP_ID || !GITHUB_APP_INSTALLATION_ID || !APP_PRIVATE_KEY) {
-    throw new Error("GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID, and APP_PRIVATE_KEY must be set");
+  if (!GITHUB_APP_ID || !APP_INSTALLATION_ID || !APP_PRIVATE_KEY) {
+    throw new Error("GITHUB_APP_ID, APP_INSTALLATION_ID, and APP_PRIVATE_KEY must be set");
   }
 
   // 1. Generate JWT for GitHub App
@@ -98,7 +98,7 @@ async function getInstallationToken(): Promise<string> {
   const jwt = `${headerB64}.${payloadB64}.${signatureB64}`;
 
   // 2. Exchange JWT for installation access token
-  const url = `https://api.github.com/app/installations/${GITHUB_APP_INSTALLATION_ID}/access_tokens`;
+  const url = `https://api.github.com/app/installations/${APP_INSTALLATION_ID}/access_tokens`;
   const res = await fetch(url, {
     method: "POST",
     headers: {
