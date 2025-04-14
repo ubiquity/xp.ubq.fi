@@ -26,6 +26,21 @@ select {
   padding: 16px;
 }
 
+.xp-analytics-org-avatar {
+  height: 48px; /* Adjust size as needed */
+  width: 48px;
+  border-radius: 4px; /* Optional: rounded corners */
+  /* margin-right: 8px; */ /* Space between avatar and text */
+  vertical-align: middle; /* Align with text */
+}
+
+.xp-analytics-context-label {
+  color: #ccc; /* Match other labels */
+  font-size: 24px;
+  /* Add other styles as needed, e.g., margin-right */
+  margin-left: 16px;
+}
+
 /* Container for the slider above the chart */
 .xp-analytics-slider-container {
   padding: 8px 16px; /* Add some padding */
@@ -37,7 +52,7 @@ select {
 
 .xp-analytics-header-row {
   display: flex;
-  gap: 32px;
+  /* gap: 32px; */
   align-items: center;
 }
 .xp-analytics-label {

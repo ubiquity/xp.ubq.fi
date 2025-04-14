@@ -8,6 +8,21 @@
 
 import type { TimeSeriesEntry } from "../data-transform";
 
+// Define the structure for points with cumulative XP
+type CumulativePoint = {
+  time: number;
+  xp: number;
+};
+
+// Define the structure for points mapped to SVG coordinates
+type SvgPoint = {
+    x: number;
+    y: number;
+    time: number;
+    xp: number;
+};
+
+
 /**
  * Renders a multi-line time series chart into the given container.
  * @param data TimeSeriesEntry[] - Expects data filtered by contributor, but NOT by time cutoff.
@@ -47,8 +62,8 @@ export function renderTimeSeriesChart(
   // --- Config ---
   const svgNS = "http://www.w3.org/2000/svg";
   const width = options?.width ?? (container.clientWidth || container.getBoundingClientRect().width || 600);
-  // Use container height if available and no option is passed, fallback to 320
   const height = options?.height ?? (container.clientHeight || container.getBoundingClientRect().height || 320);
+  const pointRadius = 2; // Fixed radius
 
   // Calculate dynamic margins based on label widths
   const tempSvg = document.createElementNS(svgNS, "svg");
@@ -91,12 +106,16 @@ export function renderTimeSeriesChart(
   const finalContributorData = data.map(entry => {
     const sortedSeries = [...entry.series].sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
     let cumulative = 0;
-    const allCalculatedPoints = sortedSeries.map(pt => {
+
+    // Calculate cumulative points
+    const allCalculatedPoints: CumulativePoint[] = sortedSeries.map(pt => {
       cumulative += pt.xp;
-      return { time: new Date(pt.time).getTime(), xp: cumulative };
+      const pointTime = new Date(pt.time).getTime();
+      return { time: pointTime, xp: cumulative };
     });
 
-    let pointsToRender = allCalculatedPoints;
+    // Filter points based on cutoffTimeMs for line drawing and interpolate the last segment
+    let pointsToRender: CumulativePoint[] = allCalculatedPoints;
     if (options?.cutoffTimeMs !== undefined && allCalculatedPoints.length > 0) {
       let lastVisibleIndex = -1;
       for (let i = 0; i < allCalculatedPoints.length; i++) {
@@ -122,16 +141,19 @@ export function renderTimeSeriesChart(
            if (timeDiff > 0) {
              const fraction = (options.cutoffTimeMs - prevPoint.time) / timeDiff;
              const interpolatedXP = prevPoint.xp + (nextPoint.xp - prevPoint.xp) * fraction;
+             // Add the interpolated point for the line path
              pointsToRender.push({ time: options.cutoffTimeMs, xp: interpolatedXP });
            }
         }
       }
     }
+     // Safeguard: If filtering resulted in empty but shouldn't have, keep first point.
      if (allCalculatedPoints.length > 0 && pointsToRender.length === 0 && options?.cutoffTimeMs && options.cutoffTimeMs >= allCalculatedPoints[0].time) {
         pointsToRender = allCalculatedPoints.slice(0, 1);
      }
-    return { ...entry, points: pointsToRender };
-  }).filter(entry => entry.points.length > 0);
+    return { ...entry, points: pointsToRender }; // Return filtered/interpolated points
+
+  }).filter(entry => entry.points.length > 0); // Keep only entries with points to render
 
   // --- SVG Setup ---
   const svg = document.createElementNS(svgNS, "svg");
@@ -171,46 +193,47 @@ export function renderTimeSeriesChart(
     const isError = errorContributors.includes(entry.contributor);
 
     // --- Opacity Calculation ---
-    let rankOpacity = 0.5; // Default base opacity if ranks not provided or invalid rank
-    const minRankOpacity = 0.2; // Define minimum rank opacity
+    let rankOpacity = 0.5;
+    const minRankOpacity = 0.2;
     if (options?.ranks) {
       const rank = options.ranks[entry.contributor];
-      if (rank && rank > 0) {
-         rankOpacity = Math.max(minRankOpacity, 1 / rank); // Use rank opacity directly, with floor
-      } else {
-         rankOpacity = minRankOpacity; // Use floor if rank invalid
-      }
+      rankOpacity = (rank && rank > 0) ? Math.max(minRankOpacity, 1 / rank) : minRankOpacity;
     }
+    let targetOpacity = rankOpacity;
+    if (isError) { targetOpacity = 0.85; }
 
-    // Apply animation modulation
-    let modulatedOpacity = rankOpacity;
+    let modulatedOpacity = targetOpacity;
     if (options?.animationProgress !== undefined && options.animationProgress < 1) {
-       modulatedOpacity = Math.max(0.05, rankOpacity * options.animationProgress);
+       modulatedOpacity = targetOpacity * options.animationProgress;
     }
 
-    // Calculate final opacities for line/label and points
-    let finalLineOpacity = modulatedOpacity; // Line opacity is modulated rank opacity
-    let finalPointOpacity = Math.min(1.0, finalLineOpacity + 0.25); // Point opacity = line + 25%
+    let finalLineOpacity = modulatedOpacity * 0.5;
+    let finalPointOpacity = Math.min(1.0, finalLineOpacity + 0.25);
 
-    // Apply highlight/error overrides
     if (isHighlight) {
       finalLineOpacity = 1.0;
       finalPointOpacity = 1.0;
     }
     if (isError) {
-       finalLineOpacity = 0.85; // Error takes precedence
+       finalLineOpacity = 0.85;
        finalPointOpacity = 0.85;
     }
-    // Minimum visibility is handled by minRankOpacity and animation modulation floor
 
+    if (!isHighlight && !isError) {
+       finalLineOpacity = Math.max(0.05, finalLineOpacity);
+       finalPointOpacity = Math.max(0.05, finalPointOpacity);
+    }
 
     // --- Map Points to SVG Coords ---
-    const points = entry.points.map((pt) => {
+    // Map the points that are actually going to be rendered
+    const points: SvgPoint[] = entry.points.map((pt) => {
       const timeRangeDuration = (maxTime && minTime) ? (maxTime - minTime) : 1;
       const x = leftMargin + (((pt.time ?? minTime ?? 0) - (minTime ?? 0)) / timeRangeDuration) * (width - leftMargin - rightMargin);
       const y = topMargin + (1 - pt.xp / maxXP) * (height - topMargin - bottomMargin);
-      return { x, y, xp: pt.xp, time: pt.time };
+      // Include original time/xp for potential future use (like tooltips)
+      return { x, y, time: pt.time, xp: pt.xp };
     });
+
 
     // --- Draw Line Path ---
     if (points.length > 1) {
@@ -223,19 +246,20 @@ export function renderTimeSeriesChart(
       path.setAttribute("stroke", isError ? BAD : GOOD);
       path.setAttribute("stroke-width", "2");
       path.setAttribute("fill", "none");
-      path.setAttribute("opacity", finalLineOpacity.toString()); // Use finalLineOpacity
+      path.setAttribute("opacity", finalLineOpacity.toString());
       svg.appendChild(path);
     }
 
     // --- Draw Points (Circles) ---
+    // Iterate over the points rendered for the line
     points.forEach((pt) => {
-      const circle = document.createElementNS(svgNS, "circle");
-      circle.setAttribute("cx", pt.x.toString());
-      circle.setAttribute("cy", pt.y.toString());
-      circle.setAttribute("r", "2");
-      circle.setAttribute("fill", isError ? BAD : GOOD);
-      circle.setAttribute("opacity", finalPointOpacity.toString()); // Use finalPointOpacity
-      svg.appendChild(circle);
+       const circle = document.createElementNS(svgNS, "circle");
+       circle.setAttribute("cx", pt.x.toString());
+       circle.setAttribute("cy", pt.y.toString());
+       circle.setAttribute("r", String(pointRadius)); // Use fixed radius
+       circle.setAttribute("fill", isError ? BAD : GOOD);
+       circle.setAttribute("opacity", finalPointOpacity.toString());
+       svg.appendChild(circle);
     });
 
     // --- Draw Contributor Label ---
@@ -243,7 +267,7 @@ export function renderTimeSeriesChart(
       const label = document.createElementNS(svgNS, "text");
       label.setAttribute("font-size", "14");
       label.setAttribute("fill", isError ? BAD : GOOD);
-      label.setAttribute("opacity", finalLineOpacity.toString()); // Use finalLineOpacity for label too
+      label.setAttribute("opacity", finalLineOpacity.toString());
       label.setAttribute("text-anchor", "start");
       label.textContent = entry.contributor;
 

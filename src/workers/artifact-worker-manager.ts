@@ -10,7 +10,8 @@ import { normalizeOrgRepoData } from "../normalize-org-repo-data";
 type WorkerCallbacks = {
   onProgress: (phase: string, percent: number, detail: string) => void;
   onError: (error: Error) => void;
-  onComplete: (data: { leaderboard: LeaderboardEntry[], timeSeries: TimeSeriesEntry[] }) => void;
+  // Add rawData to the completion payload
+  onComplete: (data: { leaderboard: LeaderboardEntry[], timeSeries: TimeSeriesEntry[], rawData?: OrgRepoData }) => void;
 };
 
 const DEFAULT_CALLBACKS: WorkerCallbacks = {
@@ -72,7 +73,8 @@ export async function loadArtifactData(
       orgData = normalizeOrgRepoData({ [runId]: orgData }, runId)[runId];
       callbacks.onComplete({
         leaderboard: getLeaderboardData({ [runId]: orgData }),
-        timeSeries: getTimeSeriesData({ [runId]: orgData })
+        timeSeries: getTimeSeriesData({ [runId]: orgData }),
+        rawData: cachedData // Pass raw data on cache hit too
       });
       console.log("Cache hit! Using data from IndexedDB.");
       return; // <<<--- Return here if cache hit
@@ -119,7 +121,8 @@ export async function loadArtifactData(
 
         callbacks.onComplete({
           leaderboard: getLeaderboardData({ [runId]: orgData }),
-          timeSeries: getTimeSeriesData({ [runId]: orgData })
+          timeSeries: getTimeSeriesData({ [runId]: orgData }),
+          rawData: msg.data // Pass the raw data as well
         });
         break;
 

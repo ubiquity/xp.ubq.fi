@@ -61,6 +61,10 @@ async function init() {
     const contributorSelect = document.getElementById("contributor-select") as HTMLSelectElement;
     const viewToggle = document.getElementById("view-toggle") as HTMLButtonElement;
     const timeRange = document.getElementById("time-range") as HTMLInputElement;
+    const contextLabel = document.getElementById("xp-analytics-context-label") as HTMLSpanElement;
+    const avatarImg = document.getElementById("xp-analytics-org-avatar") as HTMLImageElement;
+
+    // Context label and avatar will be set in onComplete after data is loaded
 
     // --- Render function ---
     function render() {
@@ -111,14 +115,17 @@ async function init() {
         });
 
         // --- Human-readable time range label ---
-        // Display current time based on slider value
-        if (globalMinTimeMs !== null) {
-           const currentDisplayTimeMs = currentTimeValue * MS_PER_MINUTE;
-           const format = (d: Date) =>
-             `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-           timeRangeText = `Up to: ${format(new Date(currentDisplayTimeMs))}`;
-        } else {
-           timeRangeText = "";
+         // Display full time range, indicating current slider position
+         if (globalMinTimeMs !== null && globalMaxTimeMs !== null) {
+            const currentDisplayTimeMs = currentTimeValue * MS_PER_MINUTE;
+            const format = (d: Date) =>
+              `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+            const startTimeStr = format(new Date(globalMinTimeMs));
+            const currentTimeStr = format(new Date(currentDisplayTimeMs));
+            // Indicate the full range but highlight the current end point
+            timeRangeText = `${startTimeStr} — ${currentTimeStr}`;
+         } else {
+            timeRangeText = ""; // Show nothing if time range isn't calculated yet
         }
       }
       // Update time range label
@@ -292,6 +299,52 @@ async function init() {
         console.log("%c✨ Developer Note: Access all analytics data via window.analyticsData", "color: #00e0ff; font-weight: bold;");
         console.log("Leaderboard Data:", leaderboardData);
         console.log("Time Series Data:", timeSeriesData);
+
+        // --- Determine and Set Context Label & Avatar ---
+        let orgName: string | null = null;
+        if (contextLabel && avatarImg && data.rawData && runId && data.rawData[runId]) {
+          const orgRepoDataForRun = data.rawData[runId];
+          const orgRepoKeys = Object.keys(orgRepoDataForRun);
+          if (orgRepoKeys.length === 1) {
+            const key = orgRepoKeys[0];
+            if (key.includes('/')) {
+              const [org, repo] = key.split('/');
+              contextLabel.textContent = `${org}/${repo}`; // Use user's format
+              orgName = org;
+            } else {
+              contextLabel.textContent = key; // Use user's format
+              orgName = key;
+            }
+          } else if (orgRepoKeys.length > 1) {
+            const firstKey = orgRepoKeys[0];
+            if (firstKey.includes('/')) {
+              const [org] = firstKey.split('/');
+              contextLabel.textContent = org; // Use user's format
+              orgName = org;
+            } else {
+              contextLabel.textContent = firstKey; // Use user's format
+              orgName = firstKey;
+            }
+          } else {
+             contextLabel.textContent = 'Context Unknown';
+             avatarImg.style.display = 'none'; // Hide avatar if context unknown
+          }
+
+          // Set avatar source if org name was found
+          if (orgName) {
+            avatarImg.src = `https://github.com/${orgName}.png`;
+            avatarImg.style.display = 'inline-block'; // Show avatar
+            avatarImg.onerror = () => { avatarImg.style.display = 'none'; }; // Hide if avatar fails to load
+          } else {
+             avatarImg.style.display = 'none'; // Hide avatar if no org name
+          }
+
+        } else {
+           // Hide avatar if prerequisites not met
+           if(avatarImg) avatarImg.style.display = 'none';
+        }
+        // --- End Context Label & Avatar Logic ---
+
 
         initializeUI(); // Initialize after data is loaded
       }
