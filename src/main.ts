@@ -1,8 +1,10 @@
-import { getRunIdFromQuery } from "./utils";
+import { createDevWidget, updateRunsList } from "./components/dev-mode-widget";
+import type { LeaderboardEntry, TimeSeriesEntry } from "./data-transform";
+import { fetchLatestWorkflowRuns } from "./github-actions";
+import { getRunIdFromQuery, isProduction } from "./utils";
 import { renderLeaderboardChart } from "./visualization/leaderboard-chart";
 import { renderTimeSeriesChart } from "./visualization/time-series-chart";
-import { loadArtifactData, cleanupWorker } from "./workers/artifact-worker-manager";
-import type { LeaderboardEntry, TimeSeriesEntry } from "./data-transform";
+import { cleanupWorker, loadArtifactData } from "./workers/artifact-worker-manager";
 
 type ViewMode = "leaderboard" | "timeseries";
 
@@ -28,11 +30,48 @@ const progressText = document.createElement("div");
 progressText.style.marginTop = "16px";
 loadingOverlay.appendChild(progressText);
 
+async function initDevMode() {
+  const { widget, runsList, style } = createDevWidget();
+  document.body.appendChild(style);
+  document.body.appendChild(widget);
+
+  try {
+    const runs = await fetchLatestWorkflowRuns();
+    const currentRunId = getRunIdFromQuery();
+    updateRunsList(runsList, runs, currentRunId);
+  } catch (error) {
+    console.error("Failed to load workflow runs:", error);
+  }
+}
+
 async function init() {
+  if (!isProduction()) {
+    await initDevMode();
+  }
+
   try {
     const runId = getRunIdFromQuery();
     if (!runId) {
-      console.error("No run ID found in URL");
+      if (!isProduction()) {
+        const root = document.getElementById("xp-analytics-root")!;
+        root.innerHTML = `
+          <div style="
+            display: flex;
+            height: 100vh;
+            align-items: center;
+            justify-content: center;
+            color: #00e0ff;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          ">
+            <div style="text-align: center">
+              <h2>Development Mode</h2>
+              <p>Select a run from the widget in the bottom right corner</p>
+            </div>
+          </div>
+        `;
+      } else {
+        console.error("No run ID found in URL");
+      }
       return;
     }
 

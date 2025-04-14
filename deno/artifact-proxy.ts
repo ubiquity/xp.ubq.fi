@@ -328,6 +328,44 @@ Deno.serve(async (req: Request) => {
     }
   }
 
+  // API: List workflow runs
+  if (pathname.startsWith("/api/workflow-runs")) {
+    startTimer("workflowRuns");
+
+    try {
+      const token = await getInstallationToken();
+      const url = `https://api.github.com/repos/${ORG}/${REPO}/actions/runs?event=workflow_dispatch&branch=chore/run-all&per_page=10`;
+
+      log("API", `Fetching workflow runs: ${url}`, colors.blue);
+
+      const res = await fetch(url, {
+        headers: {
+          Accept: "application/vnd.github.v3+json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        log("API", `GitHub API error: ${res.status} - ${errorText}`, colors.red);
+        return jsonResponse({
+          error: `GitHub API error: ${res.status} ${res.statusText}`,
+          details: errorText
+        }, res.status);
+      }
+
+      const data = await res.json();
+      endTimer("workflowRuns", "Workflow runs fetch completed");
+      endTimer("request", "Request completed");
+      return jsonResponse(data);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      log("ERROR", `Workflow runs fetch failed: ${message}`, colors.red);
+      endTimer("request", "Request failed");
+      return jsonResponse({ error: message }, 500);
+    }
+  }
+
   // API: List artifacts
   if (pathname.startsWith("/api/artifacts")) {
     startTimer("artifacts");

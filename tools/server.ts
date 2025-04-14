@@ -1,7 +1,7 @@
 import { readdir, stat, unlink } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { ORG, REPO } from "../src/constants.ts";
-import { getInstallationToken } from "../src/github-auth.ts";
+import { getInstallationToken } from "./local-auth.ts";
 
 // Terminal colors for better visibility
 const colors = {
@@ -180,6 +180,35 @@ const server = Bun.serve({
         });
       } catch (error) {
         log("ERROR", `Failed to download artifact: ${error.message}`, colors.red);
+        return jsonResponse({ error: error.message }, 500);
+      }
+    }
+
+    // API: Get workflow runs
+    if (pathname.startsWith("/api/workflow-runs")) {
+      try {
+        startTimer("workflowRuns");
+        const token = await getInstallationToken();
+        const url = `https://api.github.com/repos/${ORG}/${REPO}/actions/runs?event=workflow_dispatch&branch=chore/run-all&per_page=10`;
+
+        log("API", `Fetching workflow runs: ${url}`, colors.blue);
+
+        const response = await fetch(url, {
+          headers: {
+            Accept: "application/vnd.github.v3+json",
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(`GitHub API error: ${response.status} ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        endTimer("workflowRuns", "Workflow runs fetch completed");
+        return jsonResponse(data);
+      } catch (error) {
+        log("ERROR", `Failed to fetch workflow runs: ${error.message}`, colors.red);
         return jsonResponse({ error: error.message }, 500);
       }
     }

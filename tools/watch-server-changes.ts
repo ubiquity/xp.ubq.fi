@@ -1,5 +1,4 @@
 import { watch } from "node:fs";
-import { resolve } from "node:path";
 
 console.log("Starting server file watcher...");
 
@@ -11,8 +10,8 @@ const watchPaths = [
   "src/download-artifact.ts",
   "src/download-artifacts.ts",
   "src/fetch-artifacts-list.ts",
-  "src/github-auth.ts",
   "src/unzip-artifact.ts",
+  "tools/local-auth.ts",
   "src/utils.ts",
   "wasm/src"
 ];
