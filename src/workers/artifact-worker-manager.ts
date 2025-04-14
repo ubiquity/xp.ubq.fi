@@ -4,7 +4,6 @@
 
 import type { LeaderboardEntry, TimeSeriesEntry } from "../data-transform";
 import { getLeaderboardData, getTimeSeriesData } from "../data-transform";
-import { groupArtifactsByOrgRepoIssue } from "../utils";
 import { getArtifact } from "../db/get-artifact";
 
 type WorkerCallbacks = {
@@ -21,7 +20,7 @@ let worker: Worker | null = null;
 function getWorker(): Worker {
   if (!worker) {
     worker = new Worker(
-      new URL("../../dist/artifact-processor.js", import.meta.url),
+      "/artifact-processor.js",
       { type: "module" }
     );
   }

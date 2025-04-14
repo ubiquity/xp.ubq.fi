@@ -1,6 +1,5 @@
-import { readdir, unlink } from "node:fs/promises";
+import { readdir, stat, unlink } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { stat } from "node:fs/promises";
 import { ORG, REPO } from "../src/constants.ts";
 import { getInstallationToken } from "../src/github-auth.ts";
 
@@ -258,12 +257,19 @@ const server = Bun.serve({
 
     if (pathname === "/" || pathname === "/index.html") {
       filePath = resolve(process.cwd(), "src/index.html");
+    } else if (pathname === "/bundle.js") {
+      filePath = resolve(process.cwd(), "dist/bundle.js");
+    } else if (pathname === "/artifact-processor.js") {
+      filePath = resolve(process.cwd(), "dist/artifact-processor.js");
+    } else if (pathname === "/style.css") {
+      // Prefer dist/style.css if present, fallback to src/style.css
+      const distCss = resolve(process.cwd(), "dist/style.css");
+      const srcCss = resolve(process.cwd(), "src/style.css");
+      filePath = (await ensureFileExists(distCss)) ? distCss : srcCss;
     } else if (pathname.startsWith("/dist/")) {
       filePath = resolve(process.cwd(), "." + pathname);
     } else if (pathname.startsWith("/src/")) {
       filePath = resolve(process.cwd(), "." + pathname);
-    } else if (pathname === "/style.css") {
-      filePath = resolve(process.cwd(), "src/style.css");
     } else if (pathname.startsWith("/api/")) {
       // Unknown API route
       log("API", `Unknown API route: ${pathname}`, colors.red);

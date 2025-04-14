@@ -2,16 +2,15 @@
   "name": "bun-esbuild-frontend",
   "version": "0.1.0",
   "scripts": {
-    "build:wasm": "cd wasm/wasm-unzipper && RUSTFLAGS=\"-C target-feature=+simd128\" cargo build --target wasm32-unknown-unknown --release",
     "build": "bun run tools/build.ts",
-    "watch": "bun run tools/watch.ts",
     "type-check": "tsc --noEmit --watch",
     "dev:server": "bun --hot run tools/server.ts",
     "dev:frontend": "run-p watch type-check",
     "dev:enhanced": "bun run tools/dev.ts",
     "dev:start-server": "bun --watch run tools/server.ts",
-    "dev": "bun run tools/start-dev.ts",
-    "start": "bun run tools/server.ts"
+    "dev": "rm -rf dist && bun run tools/start-dev.ts",
+    "start": "bun run tools/server.ts",
+    "auto-commit": "bun run tools/auto-commit-watch.ts"
   },
   "devDependencies": {
     "@types/bun": "^1.2.9",
@@ -22,6 +21,7 @@
   },
   "dependencies": {
     "@zip.js/zip.js": "^2.7.60",
+    "chokidar": "^4.0.3",
     "fflate": "^0.8.2",
     "jose": "^6.0.10"
   }

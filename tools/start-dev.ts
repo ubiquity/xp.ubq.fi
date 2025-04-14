@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
-import { spawn } from "node:child_process";
 import { build } from "esbuild";
+import { spawn } from "node:child_process";
 
 // Ensure dist directory exists
 try {
@@ -59,12 +59,6 @@ process.on("SIGINT", () => {
 
 // Browser opening disabled to prevent auto-opening on every run
 
-// Watch frontend with esbuild (non-blocking)
-console.log("👀 Watching frontend files...");
-spawn("bun", ["run", "tools/watch.ts"], {
-  stdio: "inherit",
-  detached: true
-});
 
 console.log("\n✨ Development environment ready!");
 console.log("   Press Ctrl+C to stop\n");

@@ -1,0 +1,57 @@
+name: Deno Deploy Preview
+
+on:
+  push:
+    branches: [ "**" ]
+  pull_request:
+    branches: [ "**" ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build frontend
+        env:
+          GITHUB_OWNER: ${{ secrets.GITHUB_OWNER }}
+          GITHUB_REPO: ${{ secrets.GITHUB_REPO }}
+        run: bun run tools/build.ts
+
+      - name: Copy static assets to dist
+        run: |
+          mkdir -p dist
+          cp src/index.html dist/
+          cp src/style.css dist/
+          # Add more static assets here if needed
+
+      - name: List dist directory contents
+        run: |
+          echo "Contents of dist/:"
+          ls -l dist
+          echo "Contents of project root:"
+          ls -l
+
+      - name: Set Deno Deploy project name
+        id: project_name
+        run: |
+          echo "name=$(echo '${{ github.event.repository.name }}' | tr '.' '-')" >> $GITHUB_OUTPUT
+
+      - name: Deploy to Deno Deploy
+        uses: denoland/deployctl@v1
+        with:
+          project: ${{ steps.project_name.outputs.name }}
+          entrypoint: deno/artifact-proxy.ts

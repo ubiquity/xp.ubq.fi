@@ -1,8 +1,6 @@
-import { saveArtifact } from "./db/save-artifact";
-import { downloadArtifactZip } from "./download-artifact";
-import { fetchArtifactsList } from "./fetch-artifacts-list";
-import { getRunIdFromQuery } from "./utils";
+// Removed downloadArtifactZip and fetchArtifactsList imports as they are replaced
 import { unzipArtifact } from "./unzip-artifact";
+import { getRunIdFromQuery } from "./utils";
 
 // Define callback types for progress reporting and error handling
 export type ProgressCallback = (
@@ -17,139 +15,72 @@ export type ErrorCallback = (error: Error) => void;
 const defaultProgress: ProgressCallback = () => {};
 const defaultError: ErrorCallback = () => {};
 
-/**
- * Downloads and loads a single artifact ZIP file from the test fixtures
- */
-async function loadLocalArtifactZip(
-  artifactName: string,
-  runId: string,
-  onProgress: ProgressCallback
-): Promise<any> {
-  // Report start of download
-  onProgress('Download', 0, artifactName);
+// Removed unused loadLocalArtifactZip function
 
-  const response = await fetch(`/api/download-artifact?id=${encodeURIComponent(artifactName)}&run=${encodeURIComponent(runId)}`, {
-    headers: {
-      'Accept': 'application/zip'
-    }
-  });
-
-  if (!response.ok) {
-    throw new Error(`Failed to load artifact ${artifactName}: ${response.status}`);
-  }
-
-  const arrayBuffer = await response.arrayBuffer();
-  const zipData = new Uint8Array(arrayBuffer);
-
-  onProgress('Download', 100, artifactName);
-  onProgress('Unzipping', 0, artifactName);
-
-  const files = await unzipArtifact(zipData);
-
-  // Report unzipping complete
-  onProgress('Unzipping', 100, artifactName);
-
-  return files;
-}
-
-export type ArtifactData = {
-  name: string;
-  data: any[];
-};
+const TARGET_ARTIFACT_NAME = "final-aggregated-results";
 
 /**
- * Main function to download and process all artifacts
+ * Fetches metadata for the target artifact.
  */
-export async function downloadAndStoreArtifacts(
+
+
+/**
+ * Downloads and processes the single 'final-aggregated-results' artifact.
+ * Returns the parsed JSON array from 'aggregated_results.json'.
+ */
+export async function downloadAndProcessAggregatedArtifact(
   onProgress: ProgressCallback = defaultProgress,
   onError: ErrorCallback = defaultError,
   explicitRunId?: string
-): Promise<ArtifactData[]> {
+): Promise<any[]> { // Return the parsed JSON array directly
   try {
     const runId = explicitRunId ?? getRunIdFromQuery();
     if (!runId) {
       throw new Error("No run ID provided in query params");
     }
+    onProgress('Fetching Metadata', 0, `Run ID: ${runId}`);
 
-    // MINI MODE: Use the same pipeline as test, but with a single artifact
-    const isMini = runId === "mini";
-    const isTest = runId === "test";
-    const results: ArtifactData[] = [];
-    const artifactsList = isMini
-      ? [
-          {
-            id: 1,
-            name: "small-test-fixture",
-            archive_download_url: "/api/download-artifact?id=small-test-fixture&run=mini",
-          },
-        ]
-      : isTest
-      ? [
-          {
-            id: 1,
-            name: "results-ubiquity-os-marketplace",
-            archive_download_url: "/api/download-artifact?id=results-ubiquity-os-marketplace&run=test",
-          },
-          {
-            id: 2,
-            name: "results-ubiquity-os",
-            archive_download_url: "/api/download-artifact?id=results-ubiquity-os&run=test",
-          },
-          {
-            id: 3,
-            name: "results-ubiquity",
-            archive_download_url: "/api/download-artifact?id=results-ubiquity&run=test",
-          },
-        ]
-      : await fetchArtifactsList(runId);
-
-    // Process each artifact sequentially
-    for (let i = 0; i < artifactsList.length; i++) {
-      const artifact = artifactsList[i];
-      const artifactNumber = i + 1;
-      const totalProgress = Math.floor(((artifactNumber - 1) / artifactsList.length) * 100);
-
-      try {
-        // Download and process the artifact
-        const extractedFiles =
-          isMini || isTest
-            ? await loadLocalArtifactZip(
-                artifact.name,
-                runId,
-                (phase, phasePercent, detail) => {
-                  const artifactWeight = 100 / artifactsList.length;
-                  const overallPercent =
-                    totalProgress + (phasePercent / 100) * (artifactWeight / 2);
-                  onProgress(
-                    phase,
-                    overallPercent,
-                    detail || `${artifact.name} (${artifactNumber}/${artifactsList.length})`
-                  );
-                }
-              )
-            : await downloadArtifactZip(artifact, runId).then((data) => unzipArtifact(data));
-
-        // Store the results
-        results.push({
-          name: artifact.name,
-          data: extractedFiles,
-        });
-
-        // Report progress
-        const progress = Math.floor((artifactNumber / artifactsList.length) * 100);
-        onProgress("Processing", progress, `Completed ${artifactNumber}/${artifactsList.length}`);
-      } catch (error) {
-        if (error instanceof Error) {
-          onError(error);
-        } else {
-          onError(new Error(`Unknown error processing ${artifact.name}`));
-        }
-        // Continue with next artifact even if this one fails
-      }
+    // 1. Fetch metadata for the target artifact using backend API
+    const metaRes = await fetch(`/api/artifacts?runId=${encodeURIComponent(runId)}`);
+    if (!metaRes.ok) {
+      throw new Error(`Failed to fetch artifacts list for run ${runId}: ${metaRes.status} ${metaRes.statusText}`);
     }
+    const metaData = await metaRes.json();
+    const artifactMeta = (metaData.artifacts || []).find((a: any) => a.name === TARGET_ARTIFACT_NAME);
 
-    onProgress('Complete', 100, 'All artifacts processed');
-    return results;
+    if (!artifactMeta) {
+      console.error(`Artifact "${TARGET_ARTIFACT_NAME}" not found for run ${runId}.`);
+      onError(new Error(`Artifact "${TARGET_ARTIFACT_NAME}" not found.`));
+      return [];
+    }
+    onProgress('Fetching Metadata', 20, `Found artifact: ${artifactMeta.name}`);
+
+    // 2. Download the artifact ZIP using the backend API
+    const archiveUrl = `/api/download-artifact?id=${encodeURIComponent(artifactMeta.id)}&run=${encodeURIComponent(runId)}`;
+    console.log(`Downloading artifact from: ${archiveUrl}`);
+    onProgress('Downloading', 20, `Downloading ${artifactMeta.name}...`);
+
+    const zipRes = await fetch(archiveUrl, {
+      redirect: 'follow'
+    });
+
+    if (!zipRes.ok) {
+      throw new Error(`Failed to download artifact ZIP: ${zipRes.status} ${zipRes.statusText} from ${archiveUrl}`);
+    }
+    const arrayBuffer = await zipRes.arrayBuffer();
+    const zipData = new Uint8Array(arrayBuffer);
+    console.log(`Downloaded ZIP size: ${zipData.length}`);
+    onProgress('Downloading', 60, `Downloaded ${zipData.length} bytes.`);
+
+    // 3. Unzip and parse aggregated_results.json
+    onProgress('Unzipping', 60, `Unzipping ${artifactMeta.name}...`);
+    const parsedJson = await unzipArtifact(zipData); // Use the JS unzipper
+    console.log(`Unzipped and parsed. Result type: ${Array.isArray(parsedJson) ? 'array' : typeof parsedJson}, Length: ${Array.isArray(parsedJson) ? parsedJson.length : 'N/A'}`);
+    onProgress('Unzipping', 100, `Processing complete.`);
+
+    // 4. Return the parsed JSON array
+    onProgress('Complete', 100, 'Artifact processed successfully.');
+    return parsedJson;
 
   } catch (error) {
     if (error instanceof Error) {

@@ -4,9 +4,9 @@ let cachedToken: string | undefined;
 let tokenExpiry = 0;
 
 export async function getInstallationToken(): Promise<string> {
-  const appId = Bun.env.GITHUB_APP_ID;
-  const installationId = Bun.env.GITHUB_APP_INSTALLATION_ID;
-  const privateKey = Bun.env.GITHUB_APP_PRIVATE_KEY;
+  const appId = Bun.env.APP_ID;
+  const installationId = Bun.env.APP_INSTALLATION_ID;
+  const privateKey = Bun.env.APP_PRIVATE_KEY;
 
   if (!appId || !installationId || !privateKey) {
     throw new Error('Missing GitHub App credentials in environment variables.');

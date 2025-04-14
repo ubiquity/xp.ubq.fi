@@ -1,5 +1,10 @@
 import * as esbuild from "esbuild";
 
+const define = {
+  __GITHUB_OWNER__: JSON.stringify("ubiquity-os-marketplace"),
+  __GITHUB_REPO__: JSON.stringify("text-conversation-rewards"),
+};
+
 // Build main bundle
 const mainBuild = esbuild.build({
   entryPoints: ["src/main.ts"],
@@ -8,6 +13,7 @@ const mainBuild = esbuild.build({
   format: "esm",
   target: "esnext",
   sourcemap: true,
+  define,
 });
 
 // Build worker bundle
@@ -18,6 +24,7 @@ const workerBuild = esbuild.build({
   format: "esm",
   target: "esnext",
   sourcemap: true,
+  define,
 });
 
 Promise.all([mainBuild, workerBuild])
