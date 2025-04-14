@@ -75,7 +75,7 @@ async function init() {
           : leaderboardData.filter((entry) => entry.contributor === selectedContributor);
 
         renderLeaderboardChart(filtered, chartArea, {
-          height: Math.max(200, filtered.length * 32 + 64),
+          // Let leaderboard determine its own height based on entries
           highlightContributor: selectedContributor !== "All" ? selectedContributor : leaderboardData[0]?.contributor,
         });
         timeRangeText = ""; // No time range label for leaderboard
@@ -100,7 +100,7 @@ async function init() {
           : 1; // Default to 1 (no fade) if not animating or range is zero
 
         renderTimeSeriesChart(filtered, chartArea, {
-          height: 320,
+          // Do not pass fixed height, let the renderer use container height
           highlightContributor: selectedContributor !== "All" ? selectedContributor : (highestScorer ?? undefined),
           maxYValue: maxYValue,
           ranks: ranks,
@@ -229,9 +229,10 @@ async function init() {
 
       // --- Initial Render & Animation ---
       viewMode = "timeseries"; // Default to timeseries for animation
-      render(); // Initial render before animation starts
+      // Initial render to calculate layout height BEFORE fixing it
+      render();
 
-      // Store max height and fix it
+      // Store max height and fix it (use chartArea's actual height now)
       chartArea.style.height = `${chartArea.offsetHeight}px`;
 
       // Start animation
@@ -248,12 +249,19 @@ async function init() {
     viewToggle.addEventListener("click", () => {
       viewMode = viewMode === "leaderboard" ? "timeseries" : "leaderboard";
       isAnimating = false; // Stop animation if user interacts
-      // If switching back to timeseries, maybe restart animation or set to max?
-      // For now, just render current state
-      if (viewMode === 'timeseries') {
-         currentTimeValue = parseInt(timeRange.value, 10); // Sync state with slider
+      // Reset chart area height if switching away from timeseries
+      if (viewMode === 'leaderboard') {
+        chartArea.style.height = ''; // Allow leaderboard to set its height
+      } else {
+        // If switching back to timeseries, re-sync state and potentially re-fix height/animate
+        currentTimeValue = parseInt(timeRange.value, 10); // Sync state with slider
+        // Re-render once to establish potential new height before fixing/animating
+        render();
+        chartArea.style.height = `${chartArea.offsetHeight}px`; // Re-fix height
+        // Optionally restart animation here if desired when switching back
+        // animateTimeline();
       }
-      render();
+      render(); // Render the new view
     });
 
     timeRange.addEventListener("input", () => {
