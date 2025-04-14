@@ -228,7 +228,7 @@ export function getTimeSeriesData(
           const entry = seriesMap.get(contributor)!;
 
           // Handle task event
-          if (analytics.task !== null) {
+          if (analytics.task != null) {
             const { timestamp, reward } = analytics.task;
             if (!timestamp || isNaN(new Date(timestamp).getTime())) {
               throw new Error(`Invalid task timestamp for contributor "${contributor}" in issue "${issueOrPr}"`);

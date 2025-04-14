@@ -118,7 +118,7 @@ export class DevModeWidget extends HTMLElement {
       } else if (repo) {
         runDetail = repo;
       } else {
-        runDetail = "No workflow inputs";
+        runDetail = "No workflow inputs found";
         statusColor = "#ff6b6b";
       }
 
