@@ -1,27 +1,16 @@
-// Removed downloadArtifactZip and fetchArtifactsList imports as they are replaced
 import { unzipArtifact } from "./unzip-artifact";
 import { getRunIdFromQuery } from "./utils";
 
-// Define callback types for progress reporting and error handling
 export type ProgressCallback = (
   phase: string,
   percent: number,
-  detail?: string
+  detail: string // Remove optional
 ) => void;
 
 export type ErrorCallback = (error: Error) => void;
 
-// Default no-op callbacks
-const defaultProgress: ProgressCallback = () => {};
-const defaultError: ErrorCallback = () => {};
-
-// Removed unused loadLocalArtifactZip function
-
 const TARGET_ARTIFACT_NAME = "final-aggregated-results";
 
-/**
- * Fetches metadata for the target artifact.
- */
 
 
 /**
@@ -29,10 +18,10 @@ const TARGET_ARTIFACT_NAME = "final-aggregated-results";
  * Returns the parsed JSON array from 'aggregated_results.json'.
  */
 export async function downloadAndProcessAggregatedArtifact(
-  onProgress: ProgressCallback = defaultProgress,
-  onError: ErrorCallback = defaultError,
+  onProgress: ProgressCallback,
+  onError: ErrorCallback,
   explicitRunId?: string
-): Promise<any[]> { // Return the parsed JSON array directly
+): Promise<unknown[]> {
   try {
     const runId = explicitRunId ?? getRunIdFromQuery();
     if (!runId) {
@@ -45,13 +34,15 @@ export async function downloadAndProcessAggregatedArtifact(
     if (!metaRes.ok) {
       throw new Error(`Failed to fetch artifacts list for run ${runId}: ${metaRes.status} ${metaRes.statusText}`);
     }
-    const metaData = await metaRes.json();
-    const artifactMeta = (metaData.artifacts || []).find((a: any) => a.name === TARGET_ARTIFACT_NAME);
+    const { artifacts } = await metaRes.json();
 
+    if (!Array.isArray(artifacts)) {
+      throw new Error("Invalid response: artifacts must be an array");
+    }
+
+    const artifactMeta = artifacts.find((a) => a.name === TARGET_ARTIFACT_NAME);
     if (!artifactMeta) {
-      console.error(`Artifact "${TARGET_ARTIFACT_NAME}" not found for run ${runId}.`);
-      onError(new Error(`Artifact "${TARGET_ARTIFACT_NAME}" not found.`));
-      return [];
+      throw new Error(`Artifact "${TARGET_ARTIFACT_NAME}" not found for run ${runId}`);
     }
     onProgress('Fetching Metadata', 20, `Found artifact: ${artifactMeta.name}`);
 
@@ -83,11 +74,7 @@ export async function downloadAndProcessAggregatedArtifact(
     return parsedJson;
 
   } catch (error) {
-    if (error instanceof Error) {
-      onError(error);
-    } else {
-      onError(new Error("Unknown error occurred during artifact processing"));
-    }
-    return []; // Return empty array on error
+    onError(error instanceof Error ? error : new Error("Unknown error occurred during artifact processing"));
+    throw error; // Re-throw instead of returning empty array
   }
 }

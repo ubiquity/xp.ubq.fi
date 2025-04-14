@@ -1,0 +1,11 @@
+:root {
+  /* Good (attention): cyan (hue 180º) */
+  --chart-color-good: #00e0ff;
+  /* Bad (error): red (hue 0º) */
+  --chart-color-bad: #ff2d2d;
+  /* Greys */
+  --chart-color-grey-dark: #222;
+  --chart-color-grey: #888;
+  --chart-color-grey-light: #ccc;
+  --chart-color-bg: #181a1b;
+}

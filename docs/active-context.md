@@ -7,6 +7,8 @@
 - Switched from WASM to JavaScript (`fflate`) for browser-side artifact unzipping.
 - Implemented data transformation for the new aggregated artifact format.
 - Updated documentation to reflect new architecture and responsibilities.
+- Refactored dev mode widget: now appends its content to itself (the custom element) and is instantiated via the `<dev-mode-widget>` tag in HTML, not programmatically.
+- Exception: Fallback and defensive logic is retained for developer tools to ensure graceful adaptation during development.
 
 ## Current Focus
 - Maintain minimal framework-free frontend with enhanced client-side capabilities.
@@ -33,3 +35,4 @@
 - All analytics and visualizations must run off IndexedDB-cached data.
 - Visualization UI must remain framework-free and minimal.
 - All UI work must use only essential CSS, no colors, and only PX units in multiples of 4px. All design/visual interest is in the data visualizations.
+- Developer tools (dev mode widget) are allowed to retain fallback and defensive logic as an explicit exception to the general rule of failing on invalid/missing data.

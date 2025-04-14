@@ -1,38 +1,40 @@
-import { getRunIdFromQuery } from "./utils";
+import "./components/dev-mode-widget";
+import type { LeaderboardEntry, TimeSeriesEntry } from "./data-transform";
+import { getRunIdFromQuery, isProduction } from "./utils";
 import { renderLeaderboardChart } from "./visualization/leaderboard-chart";
 import { renderTimeSeriesChart } from "./visualization/time-series-chart";
-import { loadArtifactData, cleanupWorker } from "./workers/artifact-worker-manager";
-import type { LeaderboardEntry, TimeSeriesEntry } from "./data-transform";
+import { cleanupWorker, loadArtifactData } from "./workers/artifact-worker-manager";
 
 type ViewMode = "leaderboard" | "timeseries";
 
 // Set up loading overlay
 const loadingOverlay = document.createElement("div");
-loadingOverlay.style.cssText = `
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(24, 26, 27, 0.9);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  color: #00e0ff;
-  font-size: 16px;
-  z-index: 1000;
-`;
+loadingOverlay.className = "loading-overlay";
 
 const progressText = document.createElement("div");
-progressText.style.marginTop = "16px";
+progressText.className = "loading-overlay-progress";
 loadingOverlay.appendChild(progressText);
 
 async function init() {
   try {
+    // Initialize dev mode widget
+    // (No longer needed: widget is instantiated via <dev-mode-widget> in HTML)
+
     const runId = getRunIdFromQuery();
     if (!runId) {
-      console.error("No run ID found in URL");
+      if (!isProduction()) {
+        const root = document.getElementById("xp-analytics-root")!;
+        root.innerHTML = `
+          <div class="dev-mode-message">
+            <div>
+              <h2>Development Mode</h2>
+              <p>Select a run from the widget in the bottom right corner</p>
+            </div>
+          </div>
+        `;
+      } else {
+        console.error("No run ID found in URL");
+      }
       return;
     }
 
@@ -53,6 +55,9 @@ async function init() {
     // --- Render function ---
     function render() {
       chartArea.innerHTML = "";
+      const timeRangeLabel = document.getElementById("time-range-label") as HTMLSpanElement;
+      let timeRangeText = "";
+
       if (viewMode === "leaderboard") {
         // Filter leaderboard data by contributor if not "All"
         const filtered = selectedContributor === "All"
@@ -60,10 +65,11 @@ async function init() {
           : leaderboardData.filter((entry) => entry.contributor === selectedContributor);
 
         renderLeaderboardChart(filtered, chartArea, {
-          width: 720,
+          // width: 720,
           height: Math.max(200, filtered.length * 32 + 64),
           highlightContributor: selectedContributor !== "All" ? selectedContributor : leaderboardData[0]?.contributor,
         });
+        timeRangeText = "";
       } else {
         // Filter time series data by contributor if not "All"
         let filtered = selectedContributor === "All"
@@ -82,10 +88,32 @@ async function init() {
         }
 
         renderTimeSeriesChart(filtered, chartArea, {
-          width: 720,
+          // width: 720,
           height: 320,
           highlightContributor: selectedContributor !== "All" ? selectedContributor : timeSeriesData[0]?.contributor,
         });
+
+        // --- Human-readable time range label ---
+        // Find min and max timestamps in the filtered data
+        const allTimestamps: number[] = [];
+        filtered.forEach(entry => {
+          entry.series.forEach(pt => {
+            allTimestamps.push(new Date(pt.time).getTime());
+          });
+        });
+        if (allTimestamps.length > 0) {
+          const min = Math.min(...allTimestamps);
+          const max = Math.max(...allTimestamps);
+          const format = (d: Date) =>
+            `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+          timeRangeText = `${format(new Date(min))} — ${format(new Date(max))}`;
+        } else {
+          timeRangeText = "";
+        }
+      }
+      // Update time range label
+      if (timeRangeLabel) {
+        timeRangeLabel.textContent = timeRangeText;
       }
       // Update toggle button label
       viewToggle.textContent = viewMode === "leaderboard" ? "Leaderboard" : "Time Series";
@@ -138,11 +166,12 @@ async function init() {
     await loadArtifactData(runId, {
       onProgress: (phase, percent, detail) => {
         progressText.textContent = `${phase}: ${Math.round(percent)}%${detail ? ` - ${detail}` : ""}`;
+        progressText.classList.remove("error");
       },
       onError: (error) => {
         console.error(error);
         progressText.textContent = `Error: ${error.message}`;
-        progressText.style.color = "#ff2d2d";
+        progressText.classList.add("error");
       },
       onComplete: (data) => {
         // Remove loading overlay

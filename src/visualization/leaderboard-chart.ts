@@ -31,24 +31,57 @@ export function renderLeaderboardChart(
     errorContributors?: string[]; // Optionally mark contributors as "bad"
   }
 ) {
-  // --- Color Variables ---
-  // Good (attention): cyan (hue 180º)
-  const GOOD = "#00e0ff";
-  // Bad (error): red (hue 0º)
-  const BAD = "#ff2d2d";
-  // Greys
-  const GREY_DARK = "#222";
-  const GREY = "#888";
-  const GREY_LIGHT = "#ccc";
-  const BG = "#181a1b";
+  // Get CSS variables
+  const computedStyle = getComputedStyle(document.documentElement);
+  const GOOD = computedStyle.getPropertyValue('--chart-color-good').trim();
+  const BAD = computedStyle.getPropertyValue('--chart-color-bad').trim();
+  const GREY_DARK = computedStyle.getPropertyValue('--chart-color-grey-dark').trim();
+  const GREY = computedStyle.getPropertyValue('--chart-color-grey').trim();
+  const GREY_LIGHT = computedStyle.getPropertyValue('--chart-color-grey-light').trim();
+  const BG = computedStyle.getPropertyValue('--chart-color-bg').trim();
 
   // --- Config ---
-  const width = options?.width ?? 600;
+  // SVG namespace
+  const svgNS = "http://www.w3.org/2000/svg";
+
+  // Responsive width: use container's width or fallback to 600
+  const width = options?.width ?? (container.clientWidth || container.getBoundingClientRect().width || 600);
   const height = options?.height ?? Math.max(200, data.length * 32 + 64);
   const barHeight = options?.barHeight ?? 24;
   const barGap = options?.barGap ?? 8;
-  const leftMargin = options?.leftMargin ?? 120;
-  const rightMargin = options?.rightMargin ?? 32;
+
+  // Calculate dynamic margins based on label widths
+  const tempSvg = document.createElementNS(svgNS, "svg");
+  tempSvg.style.visibility = "hidden";
+  document.body.appendChild(tempSvg);
+
+  // Measure contributor label widths
+  let maxContributorWidth = 0;
+  data.forEach(entry => {
+    const label = document.createElementNS(svgNS, "text");
+    label.setAttribute("font-size", "16");
+    label.textContent = entry.contributor;
+    tempSvg.appendChild(label);
+    const labelWidth = label.getBBox().width;
+    maxContributorWidth = Math.max(maxContributorWidth, labelWidth);
+  });
+
+  // Measure XP label widths
+  let maxXpWidth = 0;
+  data.forEach(entry => {
+    const label = document.createElementNS(svgNS, "text");
+    label.setAttribute("font-size", "14");
+    label.textContent = `${entry.totalXP.toFixed(2)} XP`;
+    tempSvg.appendChild(label);
+    const labelWidth = label.getBBox().width;
+    maxXpWidth = Math.max(maxXpWidth, labelWidth);
+  });
+
+  document.body.removeChild(tempSvg);
+
+  // Set margins with padding
+  const leftMargin = options?.leftMargin ?? Math.max(120, maxContributorWidth + 32); // base padding of 32px
+  const rightMargin = options?.rightMargin ?? Math.max(32, maxXpWidth + 32); // base padding of 32px
   const topMargin = options?.topMargin ?? 32;
   const bottomMargin = options?.bottomMargin ?? 32;
   const highlightContributor = options?.highlightContributor ?? data[0]?.contributor;
@@ -63,9 +96,8 @@ export function renderLeaderboardChart(
   const maxXP = Math.max(...data.map(entry => entry.totalXP), 1);
 
   // SVG root
-  const svgNS = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(svgNS, "svg");
-  svg.setAttribute("width", width.toString());
+  svg.setAttribute("width", "100%");
   svg.setAttribute("height", height.toString());
   svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
   svg.style.display = "block";
@@ -136,26 +168,44 @@ export function renderLeaderboardChart(
       }
     });
 
-    // Contributor label
+    // Contributor label (left, dynamically clamp to avoid overflow)
     const label = document.createElementNS(svgNS, "text");
-    label.setAttribute("x", (leftMargin - 8).toString());
-    label.setAttribute("y", (y + barHeight / 2 + 6).toString());
-    label.setAttribute("text-anchor", "end");
     label.setAttribute("font-size", "16");
     label.setAttribute("fill", isError ? BAD : isHighlight ? GOOD : GREY);
     label.setAttribute("font-weight", isHighlight ? "bold" : "normal");
+    label.setAttribute("text-anchor", "end");
     label.textContent = entry.contributor;
+    // Temporarily position off-screen to measure
+    label.setAttribute("x", "0");
+    label.setAttribute("y", "-9999");
     svg.appendChild(label);
+    // Measure text width
+    const labelWidth = label.getBBox().width;
+    // Clamp so label fits within left edge
+    const unclampedLabelX = leftMargin - 8;
+    const minLabelX = labelWidth + 4;
+    const labelX = Math.max(unclampedLabelX, minLabelX);
+    label.setAttribute("x", labelX.toString());
+    label.setAttribute("y", (y + barHeight / 2 + 6).toString());
 
-    // XP label
+    // XP label (right, dynamically clamp to avoid overflow)
     const xpLabel = document.createElementNS(svgNS, "text");
-    xpLabel.setAttribute("x", (x + 8).toString());
-    xpLabel.setAttribute("y", (y + barHeight / 2 + 6).toString());
-    xpLabel.setAttribute("text-anchor", "start");
     xpLabel.setAttribute("font-size", "14");
     xpLabel.setAttribute("fill", isError ? BAD : isHighlight ? GOOD : GREY_LIGHT);
+    xpLabel.setAttribute("text-anchor", "start");
     xpLabel.textContent = `${entry.totalXP.toFixed(2)} XP`;
+    // Temporarily position off-screen to measure
+    xpLabel.setAttribute("x", "0");
+    xpLabel.setAttribute("y", "-9999");
     svg.appendChild(xpLabel);
+    // Measure text width
+    const xpLabelWidth = xpLabel.getBBox().width;
+    // Clamp so label fits within right edge
+    const unclampedXpLabelX = x + 8;
+    const maxXpLabelX = width - rightMargin - xpLabelWidth;
+    const xpLabelX = Math.min(unclampedXpLabelX, maxXpLabelX);
+    xpLabel.setAttribute("x", xpLabelX.toString());
+    xpLabel.setAttribute("y", (y + barHeight / 2 + 6).toString());
   });
 
   // Y-axis title
@@ -179,21 +229,28 @@ export function renderLeaderboardChart(
   svg.appendChild(xTitle);
 
   // Legend (repo patterns)
+  // Responsive legend layout
+  const legendCount = allRepoKeys.length + (errorContributors.length > 0 ? 1 : 0);
+  const legendAreaWidth = width - leftMargin - rightMargin;
+  const legendSpacing = legendAreaWidth / Math.max(legendCount, 1);
+  const legendRectWidth = 24;
+  const legendRectHeight = 16;
+  const legendY = height - bottomMargin + 8;
+
   allRepoKeys.forEach((repo, i) => {
-    const lx = leftMargin + i * 96;
-    const ly = height - bottomMargin + 8;
+    const lx = leftMargin + i * legendSpacing;
     const legendRect = document.createElementNS(svgNS, "rect");
     legendRect.setAttribute("x", lx.toString());
-    legendRect.setAttribute("y", ly.toString());
-    legendRect.setAttribute("width", "24");
-    legendRect.setAttribute("height", "16");
+    legendRect.setAttribute("y", legendY.toString());
+    legendRect.setAttribute("width", legendRectWidth.toString());
+    legendRect.setAttribute("height", legendRectHeight.toString());
     legendRect.setAttribute("fill", i === 0 ? GOOD : `url(#repo-pattern-${i})`);
     legendRect.setAttribute("opacity", i === 0 ? "0.7" : "1");
     svg.appendChild(legendRect);
 
     const legendLabel = document.createElementNS(svgNS, "text");
-    legendLabel.setAttribute("x", (lx + 32).toString());
-    legendLabel.setAttribute("y", (ly + 14).toString());
+    legendLabel.setAttribute("x", (lx + legendRectWidth + 8).toString());
+    legendLabel.setAttribute("y", (legendY + legendRectHeight - 2).toString());
     legendLabel.setAttribute("font-size", "12");
     legendLabel.setAttribute("fill", GREY);
     legendLabel.textContent = repo;
@@ -202,20 +259,19 @@ export function renderLeaderboardChart(
 
   // Error legend (if any)
   if (errorContributors.length > 0) {
-    const lx = leftMargin + allRepoKeys.length * 96;
-    const ly = height - bottomMargin + 8;
+    const lx = leftMargin + allRepoKeys.length * legendSpacing;
     const errorRect = document.createElementNS(svgNS, "rect");
     errorRect.setAttribute("x", lx.toString());
-    errorRect.setAttribute("y", ly.toString());
-    errorRect.setAttribute("width", "24");
-    errorRect.setAttribute("height", "16");
+    errorRect.setAttribute("y", legendY.toString());
+    errorRect.setAttribute("width", legendRectWidth.toString());
+    errorRect.setAttribute("height", legendRectHeight.toString());
     errorRect.setAttribute("fill", BAD);
     errorRect.setAttribute("opacity", "0.85");
     svg.appendChild(errorRect);
 
     const errorLabel = document.createElementNS(svgNS, "text");
-    errorLabel.setAttribute("x", (lx + 32).toString());
-    errorLabel.setAttribute("y", (ly + 14).toString());
+    errorLabel.setAttribute("x", (lx + legendRectWidth + 8).toString());
+    errorLabel.setAttribute("y", (legendY + legendRectHeight - 2).toString());
     errorLabel.setAttribute("font-size", "12");
     errorLabel.setAttribute("fill", BAD);
     errorLabel.textContent = "Error/Flagged";

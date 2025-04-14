@@ -1,6 +1,5 @@
 import * as esbuild from "esbuild";
-import { spawn, exec, ChildProcess } from "node:child_process";
-import { mkdir } from "node:fs/promises";
+import { ChildProcess, exec, spawn } from "node:child_process";
 
 // Colors for console output
 const colors = {
@@ -22,11 +21,14 @@ function log(prefix: string, message: string, color = colors.cyan): void {
 let serverProcess: ChildProcess | null = null;
 let watcherProcess: ChildProcess | null = null;
 
-// Create dist directory
+// Create dist directory and set up symlinks
+log("SETUP", "Setting up dist directory and symlinks...", colors.magenta);
 try {
-  await mkdir("dist", { recursive: true });
+  // Run symlink script
+  await import("./symlink-static.ts");
 } catch (err) {
-  // Directory probably exists already
+  log("ERROR", `Failed to set up symlinks: ${err}`, colors.red);
+  process.exit(1);
 }
 
 // Kill processes on exit

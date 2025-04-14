@@ -10,6 +10,7 @@
 - Transformation of aggregated data to nested format.
 - IndexedDB storage for processed & transformed data.
 - Basic integration test for the new artifact pipeline.
+- Dev mode widget now renders as a true custom element (`<dev-mode-widget>`) and appends its content to itself, supporting proper DOM structure and child appending. Gracefully adapts to errors and missing data during development.
 
 ## What's Left to Build
 - Enhanced UI feedback during download/unzip/parse operations.
@@ -22,6 +23,7 @@
 - Large JSON parsing (`JSON.parse` on `aggregated_results.json`) might cause memory pressure or performance issues in some browser environments (though it worked in tests). Consider stream parsing if this becomes an issue.
 - Error handling during JS unzip/parse needs refinement.
 - Limited feedback during long-running download/parse operations.
+- Fallback and defensive logic is intentionally retained for developer tools (dev mode widget) as an exception to the general rule, to support robust development workflows.
 
 ## Current Status
 The project has successfully migrated to processing the new `final-aggregated-results.zip` artifact. It now uses a JavaScript library (`fflate`) for unzipping directly in the browser/worker context. The data is transformed into the required format for analytics.

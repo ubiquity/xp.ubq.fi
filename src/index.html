@@ -3,22 +3,26 @@
 <head>
   <meta charset="UTF-8" />
   <title>XP | UbiquityOS</title>
-  <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/charts.css" />
+  <link rel="stylesheet" href="css/dev-mode-widget.css" />
 </head>
 <body>
-  <div id="xp-analytics-root" style="width: 800px; margin: 32px auto; background: #181a1b; border-radius: 8px; box-shadow: 0 0 16px #0004; padding: 32px;">
-    <div id="xp-analytics-header" style="margin-bottom: 32px;">
-      <div style="display: flex; gap: 32px; align-items: center;">
-        <label for="contributor-select" style="font-size: 16px; color: #ccc; min-width: 120px;">Contributor</label>
-        <select id="contributor-select" style="font-size: 16px; padding: 4px 8px; min-width: 160px;"></select>
-        <button id="view-toggle" style="margin-left: 32px; font-size: 16px; padding: 4px 16px; border-radius: 4px; border: none; background: #222; color: #00e0ff; cursor: pointer;">Leaderboard</button>
-        <div style="flex: 1"></div>
-        <label for="time-range" style="font-size: 16px; color: #ccc; min-width: 120px;">Time Range</label>
-        <input id="time-range" type="range" min="0" max="100" value="100" style="width: 160px;">
+  <div id="xp-analytics-root" class="xp-analytics-root">
+    <div id="xp-analytics-header" class="xp-analytics-header">
+      <div class="xp-analytics-header-row">
+        <label for="contributor-select" class="xp-analytics-label">Contributor</label>
+        <select id="contributor-select" class="xp-analytics-select"></select>
+        <button id="view-toggle" class="xp-analytics-view-toggle">Leaderboard</button>
+        <div class="xp-analytics-flex-spacer"></div>
+        <label for="time-range" class="xp-analytics-time-range-label">Time Range</label>
+        <input id="time-range" type="range" min="0" max="100" value="100" class="xp-analytics-time-range-input">
+        <span id="time-range-label" class="xp-analytics-time-range-label"></span>
       </div>
     </div>
-    <div id="xp-analytics-chart-area" style="width: 100%; min-height: 320px; background: #111; border-radius: 4px; padding: 16px; box-sizing: border-box;"></div>
+    <div id="xp-analytics-chart-area" class="xp-analytics-chart-area"></div>
   </div>
+  <dev-mode-widget></dev-mode-widget>
   <script src="/bundle.js" type="module"></script>
 </body>
 </html>

@@ -155,42 +155,63 @@ async function fetchArtifactsListFromGitHub(runId: string) {
 }
 
 // Static file serving helper with improved error handling and content types
-async function serveStaticFile(path: string) {
-  log("STATIC", `Attempting to serve: ${path}`, colors.blue);
+async function serveStaticFile(filePath: string) {
+  log("STATIC", `Attempting to serve: ${filePath}`, colors.blue);
 
+  // For CSS and visualization files, try src directory first
+  if (filePath.startsWith('css/') || filePath.startsWith('visualization/')) {
+    try {
+      const file = await Deno.readFile(`./src/${filePath}`);
+      log("STATIC", `Found in src/${filePath}`, colors.green);
+      return createFileResponse(file, filePath);
+    } catch {
+      log("STATIC", `Not found in src/${filePath}`, colors.yellow);
+    }
+  }
+
+  // Try src directory, then dist/
   try {
-    // For Deno Deploy, files must be in the same directory or imported
-    // We adjust path resolution accordingly
-    const file = await Deno.readFile(`./dist/${path}`);
-
-    const contentType = {
-      '.html': 'text/html',
-      '.css': 'text/css',
-      '.js': 'application/javascript',
-      '.mjs': 'application/javascript',
-      '.json': 'application/json',
-      '.png': 'image/png',
-      '.jpg': 'image/jpeg',
-      '.jpeg': 'image/jpeg',
-      '.svg': 'image/svg+xml',
-      '.ico': 'image/x-icon',
-    }[path.slice(path.lastIndexOf('.'))] || 'application/octet-stream';
-
-    log("STATIC", `Serving ${path} (${file.length} bytes) as ${contentType}`, colors.green);
-
-    return new Response(file, {
-      status: 200,
-      headers: {
-        'content-type': contentType,
-        'content-length': file.length.toString(),
-        'access-control-allow-origin': '*'
-      },
-    });
+    try {
+      const file = await Deno.readFile(`./src/${filePath}`);
+      log("STATIC", `Found in src/: ${filePath}`, colors.green);
+      return createFileResponse(file, filePath);
+    } catch {
+      const file = await Deno.readFile(`./dist/${filePath}`);
+      log("STATIC", `Found in dist/: ${filePath}`, colors.green);
+      return createFileResponse(file, filePath);
+    }
   } catch (err: unknown) {
     const errorMessage = err instanceof Error ? err.message : String(err);
-    log("STATIC", `Error serving ${path}: ${errorMessage}`, colors.red);
+    log("STATIC", `Error serving ${filePath}: ${errorMessage}`, colors.red);
     return null;
   }
+}
+
+function createFileResponse(file: Uint8Array, path: string) {
+
+  const contentType = {
+    '.html': 'text/html',
+    '.css': 'text/css',
+    '.js': 'application/javascript',
+    '.mjs': 'application/javascript',
+    '.json': 'application/json',
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.svg': 'image/svg+xml',
+    '.ico': 'image/x-icon',
+  }[path.slice(path.lastIndexOf('.'))] || 'application/octet-stream';
+
+  log("STATIC", `Serving ${path} (${file.length} bytes) as ${contentType}`, colors.green);
+
+  return new Response(file, {
+    status: 200,
+    headers: {
+      'content-type': contentType,
+      'content-length': file.length.toString(),
+      'access-control-allow-origin': '*'
+    },
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -323,6 +344,91 @@ Deno.serve(async (req: Request) => {
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       log("ERROR", `Artifact download failed: ${message}`, colors.red);
+      endTimer("request", "Request failed");
+      return jsonResponse({ error: message }, 500);
+    }
+  }
+
+  // API: List workflow runs
+  if (pathname.startsWith("/api/workflow-runs")) {
+    startTimer("workflowRuns");
+
+    try {
+      const token = await getInstallationToken();
+      const url = `https://api.github.com/repos/${ORG}/${REPO}/actions/runs?event=workflow_dispatch&branch=chore/run-all&per_page=10`;
+
+      log("API", `Fetching workflow runs: ${url}`, colors.blue);
+
+      const res = await fetch(url, {
+        headers: {
+          Accept: "application/vnd.github.v3+json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        log("API", `GitHub API error: ${res.status} - ${errorText}`, colors.red);
+        return jsonResponse({
+          error: `GitHub API error: ${res.status} ${res.statusText}`,
+          details: errorText
+        }, res.status);
+      }
+
+      const data = await res.json();
+      // Log the full response data to inspect its structure
+      log("DEBUG", `GitHub Workflow Runs Response: ${JSON.stringify(data, null, 2)}`, colors.yellow);
+
+      // For each workflow run, fetch its details and try to extract workflow_dispatch inputs
+      if (data.workflow_runs && data.workflow_runs.length > 0) {
+        // Only process the last 10 runs
+        const lastTenRuns = data.workflow_runs.slice(0, 10);
+        const runsWithInputs = [];
+        for (const run of lastTenRuns) {
+          let inputs = {};
+          try {
+            // Fetch run details
+            const runDetailsUrl = `https://api.github.com/repos/${ORG}/${REPO}/actions/runs/${run.id}`;
+            const runDetailsRes = await fetch(runDetailsUrl, {
+              headers: {
+                Accept: "application/vnd.github.v3+json",
+                Authorization: `Bearer ${token}`,
+              },
+            });
+            if (runDetailsRes.ok) {
+              const runDetails = await runDetailsRes.json();
+              // Try to extract workflow_dispatch inputs
+              if (
+                runDetails &&
+                runDetails.event === "workflow_dispatch"
+              ) {
+                // Sometimes inputs are in runDetails.inputs, sometimes in runDetails.payload.inputs
+                if (runDetails.inputs) {
+                  inputs = runDetails.inputs;
+                } else if (runDetails.payload && runDetails.payload.inputs) {
+                  inputs = runDetails.payload.inputs;
+                }
+              }
+            }
+          } catch (e) {
+            // Ignore errors, fallback to empty inputs
+          }
+          runsWithInputs.push({
+            ...run,
+            inputs,
+          });
+        }
+        endTimer("workflowRuns", "Workflow runs fetch completed");
+        endTimer("request", "Request completed");
+        return jsonResponse({ workflow_runs: runsWithInputs });
+      }
+
+      endTimer("workflowRuns", "Workflow runs fetch completed");
+      endTimer("request", "Request completed");
+      return jsonResponse(data);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      log("ERROR", `Workflow runs fetch failed: ${message}`, colors.red);
       endTimer("request", "Request failed");
       return jsonResponse({ error: message }, 500);
     }
