@@ -17,7 +17,7 @@ export class DevModeWidget extends HTMLElement {
 
     // Add title
     const title = document.createElement("div");
-    title.textContent = "Development Mode";
+    title.textContent = "Recent Runs";
     title.className = "dev-mode-widget__title";
     this.container.insertBefore(title, this.runsContainer);
 
@@ -26,7 +26,7 @@ export class DevModeWidget extends HTMLElement {
 
   connectedCallback() {
     if (!isProduction()) {
-      document.body.appendChild(this.container);
+      this.appendChild(this.container);
     }
   }
 
@@ -49,7 +49,7 @@ export class DevModeWidget extends HTMLElement {
     }
   }
 
-  private renderWorkflowRuns(runs: any[]) {
+  private async renderWorkflowRuns(runs: any[]) {
     this.runsContainer.innerHTML = "";
 
     if (!runs.length) {
@@ -57,30 +57,46 @@ export class DevModeWidget extends HTMLElement {
       return;
     }
 
-    runs.forEach(run => {
+    for (const run of runs) {
       const runElement = document.createElement("div");
       runElement.className = "workflow-run";
       runElement.className = `workflow-run${this.currentRunId === String(run.id) ? ' workflow-run--active' : ''}`;
 
       const timestamp = new Date(run.created_at).toLocaleString();
-      const inputs = run.inputs || {};
-      const organization = inputs.organization || "ubiquity orgs";
-      const repo = inputs.repo || "all repos";
-      const email = inputs.notification_email || "no email";
-
       let statusColor = "#63e6be"; // Default green
       let runDetail = "Processing...";
 
-      if (run.repository) {
-        runDetail = `${run.repository}${run.issueId ? `#${run.issueId}` : ''}`;
-      } else if (run.conclusion === "completed") {
-        runDetail = "No repository found";
-        statusColor = "#ff6b6b"; // Red for error
+      // Fetch workflow inputs from new API endpoint
+      let inputs: any = {};
+      try {
+        const res = await fetch(`/api/workflow-inputs/${run.id}`);
+        if (res.ok) {
+          inputs = await res.json();
+        } else {
+          console.error(`Failed to fetch workflow inputs for run ${run.id}:`, await res.text());
+        }
+      } catch (e) {
+        console.error("Error fetching workflow inputs for run", run.id, e);
+      }
+      console.log("Parsed workflow inputs for run", run.id, ":", inputs);
+
+      const organization = inputs.organization;
+      const repo = inputs.repo;
+
+      if (organization && repo) {
+        runDetail = `${organization}${repo ? `/${repo}` : ""}`;
+      } else if (organization) {
+        runDetail = organization;
+      } else if (repo) {
+        runDetail = repo;
+      } else {
+        runDetail = "No workflow inputs";
+        statusColor = "#ff6b6b";
       }
 
       runElement.innerHTML = `
         <div class="workflow-run__header">
-          <span class="workflow-run__id">Run #${run.id}</span>
+          <span class="workflow-run__id">#${run.id}</span>
           <span class="workflow-run__timestamp">${timestamp}</span>
         </div>
         <div class="workflow-run__detail" style="color: ${statusColor}">
@@ -101,7 +117,7 @@ export class DevModeWidget extends HTMLElement {
       });
 
       this.runsContainer.appendChild(runElement);
-    });
+    }
   }
 }
 

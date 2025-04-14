@@ -1,4 +1,4 @@
-import { DevModeWidget } from "./components/dev-mode-widget";
+import "./components/dev-mode-widget";
 import type { LeaderboardEntry, TimeSeriesEntry } from "./data-transform";
 import { getRunIdFromQuery, isProduction } from "./utils";
 import { renderLeaderboardChart } from "./visualization/leaderboard-chart";
@@ -9,47 +9,24 @@ type ViewMode = "leaderboard" | "timeseries";
 
 // Set up loading overlay
 const loadingOverlay = document.createElement("div");
-loadingOverlay.style.cssText = `
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(24, 26, 27, 0.9);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  color: #00e0ff;
-  font-size: 16px;
-  z-index: 1000;
-`;
+loadingOverlay.className = "loading-overlay";
 
 const progressText = document.createElement("div");
-progressText.style.marginTop = "16px";
+progressText.className = "loading-overlay-progress";
 loadingOverlay.appendChild(progressText);
 
 async function init() {
   try {
     // Initialize dev mode widget
-    if (!isProduction()) {
-      document.body.appendChild(new DevModeWidget());
-    }
+    // (No longer needed: widget is instantiated via <dev-mode-widget> in HTML)
 
     const runId = getRunIdFromQuery();
     if (!runId) {
       if (!isProduction()) {
         const root = document.getElementById("xp-analytics-root")!;
         root.innerHTML = `
-          <div style="
-            display: flex;
-            height: 100vh;
-            align-items: center;
-            justify-content: center;
-            color: #00e0ff;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-          ">
-            <div style="text-align: center">
+          <div class="dev-mode-message">
+            <div>
               <h2>Development Mode</h2>
               <p>Select a run from the widget in the bottom right corner</p>
             </div>
@@ -189,11 +166,12 @@ async function init() {
     await loadArtifactData(runId, {
       onProgress: (phase, percent, detail) => {
         progressText.textContent = `${phase}: ${Math.round(percent)}%${detail ? ` - ${detail}` : ""}`;
+        progressText.classList.remove("error");
       },
       onError: (error) => {
         console.error(error);
         progressText.textContent = `Error: ${error.message}`;
-        progressText.style.color = "#ff2d2d";
+        progressText.classList.add("error");
       },
       onComplete: (data) => {
         // Remove loading overlay

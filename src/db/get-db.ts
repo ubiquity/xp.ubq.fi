@@ -2,8 +2,10 @@ import { DB_NAME, DB_VERSION, STORE_NAME } from "./db-constants";
 
 export function getDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    if (!window.indexedDB) {
-      reject(new Error("IndexedDB is not supported in this browser"));
+    // Use indexedDB directly for compatibility with both main thread and Web Workers.
+    // Do NOT use window.indexedDB, as window is undefined in workers.
+    if (!indexedDB) {
+      reject(new Error("IndexedDB is not supported in this environment"));
       return;
     }
 

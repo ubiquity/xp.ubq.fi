@@ -1,9 +1,9 @@
+import { staticPlugin } from "@elysiajs/static";
+import { Elysia } from "elysia";
 import { readdir, stat, unlink } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { ORG, REPO } from "../src/constants.ts";
 import { getInstallationToken } from "./local-auth.ts";
-import { Elysia } from "elysia";
-import { staticPlugin } from "@elysiajs/static";
 
 // Terminal colors for better visibility
 const colors = {
@@ -93,7 +93,99 @@ app.use(
   })
 );
 
-// --- API ROUTES ---
+/**
+ * --- API ROUTES ---
+ */
+
+// --- NEW ENDPOINT: /api/workflow-inputs/:runId ---
+app.get("/api/workflow-inputs/:runId", async ({ params, set }) => {
+  const runId = params.runId;
+  if (!runId) {
+    set.status = 400;
+    return { error: "Missing runId parameter" };
+  }
+
+  try {
+    startTimer("workflowInputs");
+    const token = await getInstallationToken();
+    const artifactsUrl = `https://api.github.com/repos/${ORG}/${REPO}/actions/runs/${runId}/artifacts`;
+    log("API", `Fetching artifacts for run ${runId}: ${artifactsUrl}`, colors.blue);
+
+    const artifactsResponse = await fetch(artifactsUrl, {
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!artifactsResponse.ok) {
+      set.status = artifactsResponse.status;
+      return { error: `GitHub API error: ${artifactsResponse.status} ${artifactsResponse.statusText}` };
+    }
+
+    const artifactsData = await artifactsResponse.json();
+    const artifact = artifactsData.artifacts.find((a: any) =>
+      a.name === `workflow-inputs-${runId}`
+    );
+    if (!artifact) {
+      set.status = 404;
+      return { error: `workflow-inputs artifact not found for run ${runId}` };
+    }
+
+    // Download the artifact zip
+    const artifactUrl = artifact.archive_download_url;
+    log("API", `Downloading artifact zip: ${artifactUrl}`, colors.blue);
+    const artifactZipRes = await fetch(artifactUrl, {
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (!artifactZipRes.ok) {
+      set.status = artifactZipRes.status;
+      return { error: `Failed to download artifact zip: ${artifactZipRes.status} ${artifactZipRes.statusText}` };
+    }
+    const zipBuffer = await artifactZipRes.arrayBuffer();
+    const zipData = new Uint8Array(zipBuffer);
+
+    // Unzip and extract workflow-inputs.json
+    // Use Bun's built-in unzip
+    const tmpDir = `/tmp/workflow-inputs-${runId}-${Date.now()}`;
+    await Bun.write(`${tmpDir}.zip`, zipData);
+    await Bun.$`unzip -d ${tmpDir} ${tmpDir}.zip`;
+
+    const jsonPath = join(tmpDir, "workflow-inputs.json");
+    if (!(await ensureFileExists(jsonPath))) {
+      set.status = 404;
+      return { error: "workflow-inputs.json not found in artifact" };
+    }
+    const jsonFile = Bun.file(jsonPath);
+    const jsonText = await jsonFile.text();
+    let parsed;
+    try {
+      parsed = JSON.parse(jsonText);
+    } catch (e) {
+      set.status = 500;
+      return { error: "Failed to parse workflow-inputs.json" };
+    }
+
+    // Clean up temp files
+    try {
+      await unlink(`${tmpDir}.zip`);
+      await unlink(jsonPath);
+    } catch {}
+
+    endTimer("workflowInputs", "Fetched workflow inputs");
+    set.status = 200;
+    set.headers = { "content-type": "application/json", "access-control-allow-origin": "*" };
+    return parsed;
+  } catch (error: any) {
+    log("ERROR", `Failed to fetch workflow inputs: ${error.message}`, colors.red);
+    set.status = 500;
+    return { error: error.message };
+  }
+});
+
 
 app.get("/api/download-artifact", async ({ query, set }) => {
   const artifactId = query.id;

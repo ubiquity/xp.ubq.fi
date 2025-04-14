@@ -379,23 +379,48 @@ Deno.serve(async (req: Request) => {
       // Log the full response data to inspect its structure
       log("DEBUG", `GitHub Workflow Runs Response: ${JSON.stringify(data, null, 2)}`, colors.yellow);
 
-      // Fetch and log the full details for the first run to inspect the structure
+      // For each workflow run, fetch its details and try to extract workflow_dispatch inputs
       if (data.workflow_runs && data.workflow_runs.length > 0) {
-        const firstRunId = data.workflow_runs[0].id;
-        const runDetailsUrl = `https://api.github.com/repos/${ORG}/${REPO}/actions/runs/${firstRunId}`;
-        log("DEBUG", `Fetching run details: ${runDetailsUrl}`, colors.yellow);
-        const runDetailsRes = await fetch(runDetailsUrl, {
-          headers: {
-            Accept: "application/vnd.github.v3+json",
-            Authorization: `Bearer ${token}`,
-          },
-        });
-        if (runDetailsRes.ok) {
-          const runDetails = await runDetailsRes.json();
-          log("DEBUG", `First run details: ${JSON.stringify(runDetails, null, 2)}`, colors.yellow);
-        } else {
-          log("DEBUG", `Failed to fetch run details: ${runDetailsRes.status} ${runDetailsRes.statusText}`, colors.red);
+        // Only process the last 10 runs
+        const lastTenRuns = data.workflow_runs.slice(0, 10);
+        const runsWithInputs = [];
+        for (const run of lastTenRuns) {
+          let inputs = {};
+          try {
+            // Fetch run details
+            const runDetailsUrl = `https://api.github.com/repos/${ORG}/${REPO}/actions/runs/${run.id}`;
+            const runDetailsRes = await fetch(runDetailsUrl, {
+              headers: {
+                Accept: "application/vnd.github.v3+json",
+                Authorization: `Bearer ${token}`,
+              },
+            });
+            if (runDetailsRes.ok) {
+              const runDetails = await runDetailsRes.json();
+              // Try to extract workflow_dispatch inputs
+              if (
+                runDetails &&
+                runDetails.event === "workflow_dispatch"
+              ) {
+                // Sometimes inputs are in runDetails.inputs, sometimes in runDetails.payload.inputs
+                if (runDetails.inputs) {
+                  inputs = runDetails.inputs;
+                } else if (runDetails.payload && runDetails.payload.inputs) {
+                  inputs = runDetails.payload.inputs;
+                }
+              }
+            }
+          } catch (e) {
+            // Ignore errors, fallback to empty inputs
+          }
+          runsWithInputs.push({
+            ...run,
+            inputs,
+          });
         }
+        endTimer("workflowRuns", "Workflow runs fetch completed");
+        endTimer("request", "Request completed");
+        return jsonResponse({ workflow_runs: runsWithInputs });
       }
 
       endTimer("workflowRuns", "Workflow runs fetch completed");
