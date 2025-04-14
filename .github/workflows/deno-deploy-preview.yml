@@ -26,6 +26,9 @@ jobs:
         run: bun install
 
       - name: Build frontend
+        env:
+          GITHUB_OWNER: ${{ secrets.GITHUB_OWNER }}
+          GITHUB_REPO: ${{ secrets.GITHUB_REPO }}
         run: bun run tools/build.ts
 
       - name: Copy static assets to dist
