@@ -81,7 +81,12 @@ export class DevModeWidget extends HTMLElement {
 
     for (const run of runs) {
       const runElement = document.createElement("div");
-      runElement.className = `workflow-run${this.currentRunId === String(run.id) ? ' workflow-run--active' : ''}`;
+      // Get current run ID from URL
+      const urlParams = new URLSearchParams(window.location.search);
+      const currentRunId = urlParams.get('run');
+      const isActiveRun = currentRunId === String(run.id);
+
+      runElement.className = `workflow-run${isActiveRun ? ' workflow-run--active' : ''}`;
 
       const timestamp = new Date(run.created_at).toLocaleString(undefined, {
         month: 'short',
@@ -130,8 +135,7 @@ export class DevModeWidget extends HTMLElement {
       }
 
       runElement.innerHTML = `
-        <div class="workflow-run__header">
-          <span class="workflow-run__id">#${run.id}</span>
+        <div class="workflow-run__header" data-run-id="${run.id}">
           <span class="workflow-run__timestamp">${timestamp}</span>
         </div>
         <div class="workflow-run__detail" style="color: ${statusColor}">

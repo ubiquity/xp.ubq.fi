@@ -41,6 +41,9 @@
 
 .workflow-run--active {
   background: #333;
+  border-left: 2px solid var(--chart-color-good);
+  /* padding-left: 10px; */
+  /* margin-left: -12px; */
 }
 
 .workflow-run:hover {

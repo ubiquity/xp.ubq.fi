@@ -27,6 +27,7 @@ export function renderTimeSeriesChart(
     highlightContributor?: string; // Optionally highlight a contributor
     errorContributors?: string[]; // Optionally mark contributors as "bad"
     showLegend?: boolean;
+    maxYValue?: number; // Maximum Y value to use for scaling
   }
 ) {
   // Get CSS variables
@@ -100,12 +101,14 @@ export function renderTimeSeriesChart(
   });
 
   // Find max XP (cumulative, across all contributors and all times)
-  let maxXP = 1;
-  contributorData.forEach(entry => {
-    entry.points.forEach(pt => {
-      if (pt.xp > maxXP) maxXP = pt.xp;
+  let maxXP = options?.maxYValue ?? 1;
+  if (!options?.maxYValue) {
+    contributorData.forEach(entry => {
+      entry.points.forEach(pt => {
+        if (pt.xp > maxXP) maxXP = pt.xp;
+      });
     });
-  });
+  }
 
   // SVG root
   const svg = document.createElementNS(svgNS, "svg");
