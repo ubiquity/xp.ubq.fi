@@ -8,7 +8,7 @@
 const APP_ID = Deno.env.get("APP_ID");
 const APP_INSTALLATION_ID = Deno.env.get("APP_INSTALLATION_ID");
 const APP_PRIVATE_KEY = Deno.env.get("APP_PRIVATE_KEY");
-const ORG = Deno.env.get("ORG");
+const ORG = "ubiquity-os-marketplace";
 const REPO = Deno.env.get("REPO");
 const DEBUG = Deno.env.get("DEBUG") === "true";
 
