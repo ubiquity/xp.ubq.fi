@@ -87,9 +87,10 @@ export function renderLeaderboardChart(
   const highlightContributor = options?.highlightContributor ?? data[0]?.contributor;
   const errorContributors = options?.errorContributors ?? [];
 
-  // Determine all repo keys (for consistent stacking order)
-  const allRepoKeys = options?.repoKeys ?? Array.from(
-    new Set(data.flatMap(entry => Object.keys(entry.repoBreakdown)))
+  // Determine all issue keys (for consistent stacking order)
+  // Issue key format: repo#issueNumber
+  const allIssueKeys = Array.from(
+    new Set(data.flatMap(entry => Object.keys(entry.issueBreakdown)))
   );
 
   // Find max XP for scaling
@@ -107,26 +108,36 @@ export function renderLeaderboardChart(
   container.innerHTML = "";
   container.appendChild(svg);
 
-  // --- Patterns for repo breakdowns ---
-  // Use GOOD color for the first repo, greys for others
-  allRepoKeys.forEach((repo, i) => {
-    const pattern = document.createElementNS(svgNS, "pattern");
-    pattern.setAttribute("id", `repo-pattern-${i}`);
-    pattern.setAttribute("patternUnits", "userSpaceOnUse");
-    pattern.setAttribute("width", "8");
-    pattern.setAttribute("height", "8");
-    const rect = document.createElementNS(svgNS, "rect");
-    rect.setAttribute("width", "8");
-    rect.setAttribute("height", "8");
-    rect.setAttribute("fill", i === 0 ? GOOD : GREY_LIGHT);
-    pattern.appendChild(rect);
-    const line = document.createElementNS(svgNS, "rect");
-    line.setAttribute("width", "8");
-    line.setAttribute("height", "4");
-    line.setAttribute("fill", i === 0 ? "rgba(0,224,255,0.4)" : GREY);
-    pattern.appendChild(line);
-    svg.appendChild(pattern);
-  });
+  // Create tooltip div
+  const tooltip = document.createElement("div");
+  tooltip.style.position = "fixed";
+  tooltip.style.padding = "8px 12px";
+  tooltip.style.backgroundColor = "rgba(0, 0, 0, 0.85)";
+  tooltip.style.color = "#fff";
+  tooltip.style.borderRadius = "4px";
+  tooltip.style.fontSize = "12px";
+  tooltip.style.pointerEvents = "none";
+  tooltip.style.display = "none";
+  tooltip.style.zIndex = "1000";
+  container.appendChild(tooltip);
+
+  // --- Color generation for issue segments ---
+  // Use a mix of colors to make segments more distinguishable
+  const colors = [
+    GOOD,
+    "#4CD2E4", // Lighter cyan
+    "#33B8CC", // Darker cyan
+    "#66DBEB", // Bright cyan
+    "#29A3B8", // Deep cyan
+  ];
+
+  // Create colors for each issue
+  const issueColors = Object.fromEntries(
+    allIssueKeys.map((issueKey, i) => [
+      issueKey,
+      colors[i % colors.length]
+    ])
+  );
 
   // --- Draw bars ---
   data.forEach((entry, idx) => {
@@ -137,32 +148,65 @@ export function renderLeaderboardChart(
     const isHighlight = entry.contributor === highlightContributor;
     const isError = errorContributors.includes(entry.contributor);
 
-    // Draw stacked segments for each repo
-    allRepoKeys.forEach((repo, i) => {
-      const repoXP = entry.repoBreakdown[repo] ?? 0;
-      if (repoXP > 0) {
-        const barW = (repoXP / maxXP) * (width - leftMargin - rightMargin);
+    // Draw stacked segments for each issue
+    allIssueKeys.forEach((issueKey) => {
+      const issueXP = entry.issueBreakdown[issueKey] ?? 0;
+      if (issueXP > 0) {
+        const barW = (issueXP / maxXP) * (width - leftMargin - rightMargin);
         const rect = document.createElementNS(svgNS, "rect");
         rect.setAttribute("x", x.toString());
         rect.setAttribute("y", y.toString());
         rect.setAttribute("width", barW.toString());
         rect.setAttribute("height", barHeight.toString());
-        // Color logic: highlight = GOOD, error = BAD, else pattern
+
+        // Color logic
         if (isError) {
           rect.setAttribute("fill", BAD);
           rect.setAttribute("opacity", "0.85");
-        } else if (isHighlight && i === 0) {
-          rect.setAttribute("fill", GOOD);
-          rect.setAttribute("opacity", "1");
-        } else if (i === 0) {
-          rect.setAttribute("fill", GOOD);
-          rect.setAttribute("opacity", "0.5");
         } else {
-          rect.setAttribute("fill", `url(#repo-pattern-${i})`);
-          rect.setAttribute("opacity", "1");
+          const color = issueColors[issueKey];
+          rect.setAttribute("fill", color);
+          rect.setAttribute("opacity", isHighlight ? "1" : "0.7");
         }
-        rect.setAttribute("data-repo", repo);
-        rect.setAttribute("data-xp", repoXP.toString());
+
+        // Store data for tooltip
+        rect.setAttribute("data-issue", issueKey);
+        rect.setAttribute("data-xp", issueXP.toString());
+
+        // Add hover interactivity
+        rect.addEventListener("mouseenter", (e) => {
+          const target = e.target as SVGRectElement;
+          target.setAttribute("opacity", "1");
+          tooltip.style.display = "block";
+
+          // Format tooltip content
+          const [repo, issue] = issueKey.split("#");
+          tooltip.innerHTML = `
+            <div><strong>${repo}</strong></div>
+            <div>Issue #${issue}</div>
+            <div>${issueXP.toFixed(2)} XP</div>
+          `;
+
+          // Position tooltip near mouse but ensure it stays in view
+          const rect = target.getBoundingClientRect();
+          const tooltipX = Math.min(
+            rect.right + 10,
+            window.innerWidth - tooltip.offsetWidth - 10
+          );
+          const tooltipY = Math.min(
+            rect.top,
+            window.innerHeight - tooltip.offsetHeight - 10
+          );
+          tooltip.style.left = `${tooltipX}px`;
+          tooltip.style.top = `${tooltipY}px`;
+        });
+
+        rect.addEventListener("mouseleave", (e) => {
+          const target = e.target as SVGRectElement;
+          target.setAttribute("opacity", isHighlight ? "1" : "0.7");
+          tooltip.style.display = "none";
+        });
+
         svg.appendChild(rect);
         x += barW;
       }
@@ -206,6 +250,7 @@ export function renderLeaderboardChart(
     const xpLabelX = Math.min(unclampedXpLabelX, maxXpLabelX);
     xpLabel.setAttribute("x", xpLabelX.toString());
     xpLabel.setAttribute("y", (y + barHeight / 2 + 6).toString());
+
   });
 
   // Y-axis title
@@ -230,51 +275,57 @@ export function renderLeaderboardChart(
 
   // Legend (repo patterns)
   // Responsive legend layout
-  const legendCount = allRepoKeys.length + (errorContributors.length > 0 ? 1 : 0);
-  const legendAreaWidth = width - leftMargin - rightMargin;
-  const legendSpacing = legendAreaWidth / Math.max(legendCount, 1);
-  const legendRectWidth = 24;
-  const legendRectHeight = 16;
-  const legendY = height - bottomMargin + 8;
+  // Create a scrollable legend container
+  const legendContainer = document.createElement("div");
+  legendContainer.style.position = "absolute";
+  legendContainer.style.left = `${leftMargin}px`;
+  legendContainer.style.bottom = `${bottomMargin - 32}px`; // Position above the bottom margin
+  legendContainer.style.width = `${width - leftMargin - rightMargin}px`;
+  legendContainer.style.height = "40px"; // Fixed height for scrolling
+  legendContainer.style.overflowX = "auto";
+  legendContainer.style.overflowY = "hidden";
+  legendContainer.style.whiteSpace = "nowrap";
+  legendContainer.style.backgroundColor = BG;
+  container.appendChild(legendContainer);
 
-  allRepoKeys.forEach((repo, i) => {
-    const lx = leftMargin + i * legendSpacing;
-    const legendRect = document.createElementNS(svgNS, "rect");
-    legendRect.setAttribute("x", lx.toString());
-    legendRect.setAttribute("y", legendY.toString());
-    legendRect.setAttribute("width", legendRectWidth.toString());
-    legendRect.setAttribute("height", legendRectHeight.toString());
-    legendRect.setAttribute("fill", i === 0 ? GOOD : `url(#repo-pattern-${i})`);
-    legendRect.setAttribute("opacity", i === 0 ? "0.7" : "1");
-    svg.appendChild(legendRect);
+  // Add legend items to the scrollable container
+  allIssueKeys.forEach((issueKey) => {
+    const legendItem = document.createElement("div");
+    legendItem.style.display = "inline-block";
+    legendItem.style.marginRight = "16px";
 
-    const legendLabel = document.createElementNS(svgNS, "text");
-    legendLabel.setAttribute("x", (lx + legendRectWidth + 8).toString());
-    legendLabel.setAttribute("y", (legendY + legendRectHeight - 2).toString());
-    legendLabel.setAttribute("font-size", "12");
-    legendLabel.setAttribute("fill", GREY);
-    legendLabel.textContent = repo;
-    svg.appendChild(legendLabel);
+    const color = issueColors[issueKey];
+    legendItem.innerHTML = `
+      <div style="display: inline-block; width: 24px; height: 16px; background: ${color}; opacity: 0.7; vertical-align: middle;"></div>
+      <span style="margin-left: 8px; color: ${GREY}; font-size: 12px; vertical-align: middle;">${issueKey}</span>
+    `;
+
+    // Add hover interaction to highlight corresponding segments
+    legendItem.addEventListener("mouseenter", () => {
+      const segments = svg.querySelectorAll(`rect[data-issue="${issueKey}"]`);
+      segments.forEach(segment => segment.setAttribute("opacity", "1"));
+    });
+
+    legendItem.addEventListener("mouseleave", () => {
+      const segments = svg.querySelectorAll(`rect[data-issue="${issueKey}"]`);
+      segments.forEach(segment => {
+        const isHighlightSegment = segment.parentElement?.querySelector(`text[data-contributor="${highlightContributor}"]`) !== null;
+        segment.setAttribute("opacity", isHighlightSegment ? "1" : "0.7");
+      });
+    });
+
+    legendContainer.appendChild(legendItem);
   });
 
-  // Error legend (if any)
+  // Add error legend if needed
   if (errorContributors.length > 0) {
-    const lx = leftMargin + allRepoKeys.length * legendSpacing;
-    const errorRect = document.createElementNS(svgNS, "rect");
-    errorRect.setAttribute("x", lx.toString());
-    errorRect.setAttribute("y", legendY.toString());
-    errorRect.setAttribute("width", legendRectWidth.toString());
-    errorRect.setAttribute("height", legendRectHeight.toString());
-    errorRect.setAttribute("fill", BAD);
-    errorRect.setAttribute("opacity", "0.85");
-    svg.appendChild(errorRect);
-
-    const errorLabel = document.createElementNS(svgNS, "text");
-    errorLabel.setAttribute("x", (lx + legendRectWidth + 8).toString());
-    errorLabel.setAttribute("y", (legendY + legendRectHeight - 2).toString());
-    errorLabel.setAttribute("font-size", "12");
-    errorLabel.setAttribute("fill", BAD);
-    errorLabel.textContent = "Error/Flagged";
-    svg.appendChild(errorLabel);
+    const errorItem = document.createElement("div");
+    errorItem.style.display = "inline-block";
+    errorItem.style.marginRight = "16px";
+    errorItem.innerHTML = `
+      <div style="display: inline-block; width: 24px; height: 16px; background: ${BAD}; opacity: 0.85; vertical-align: middle;"></div>
+      <span style="margin-left: 8px; color: ${BAD}; font-size: 12px; vertical-align: middle;">Error/Flagged</span>
+    `;
+    legendContainer.appendChild(errorItem);
   }
 }

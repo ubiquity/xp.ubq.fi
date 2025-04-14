@@ -36,6 +36,8 @@ export type LeaderboardEntry = {
   userId: number;
   totalXP: number;
   repoBreakdown: { [repo: string]: number };
+  issuePrCountBreakdown: { [repo: string]: number }; // Number of unique issues/prs per repo
+  issueBreakdown: { [issue: string]: number }; // XP per issue (issue = repo#issueNumber)
 };
 
 export type TimeSeriesDataPoint = {
@@ -76,14 +78,23 @@ export function getLeaderboardData(
       sampleIssue: Object.entries(Object.values(repos)[0] || {})[0]?.[1] || null
     }))
   });
-  // contributorKey: { userId, totalXP, repoBreakdown }
+  // contributorKey: { userId, totalXP, repoBreakdown, issuePrCountBreakdown }
   const leaderboard: Map<string, LeaderboardEntry> = new Map();
+
+  // For issue/pr count: contributor -> repo -> Set of issue/pr ids
+  const issuePrTracker: Map<string, { [repo: string]: Set<string> }> = new Map();
+
+  // For issue breakdown: contributor -> issueKey -> XP
+  // issueKey = `${repo}#${issueNumber}`
+  const issueBreakdownTracker: Map<string, { [issueKey: string]: number }> = new Map();
 
   for (const org in data) {
     const orgData = data[org];
     for (const repo in orgData) {
       const repoData = orgData[repo];
       for (const issueOrPr in repoData) {
+        // Only include issues, not pulls (assuming pulls are associated with issues)
+        // If you need to filter out PRs, add logic here (e.g., if issueOrPr starts with "pr" skip)
         const issueData = repoData[issueOrPr];
         for (const contributor in issueData) {
           const analytics: ContributorAnalytics = issueData[contributor];
@@ -105,15 +116,45 @@ export function getLeaderboardData(
               userId: analytics.userId,
               totalXP: 0,
               repoBreakdown: {},
+              issuePrCountBreakdown: {},
+              issueBreakdown: {},
             });
           }
 
           const entry = leaderboard.get(contributor)!;
           entry.totalXP += analytics.total;
           entry.repoBreakdown[repo] = (entry.repoBreakdown[repo] || 0) + analytics.total;
+
+          // Track unique issues/prs per contributor per repo
+          if (!issuePrTracker.has(contributor)) {
+            issuePrTracker.set(contributor, {});
+          }
+          if (!issuePrTracker.get(contributor)![repo]) {
+            issuePrTracker.get(contributor)![repo] = new Set();
+          }
+          issuePrTracker.get(contributor)![repo].add(issueOrPr);
+
+          // Track XP per issue (issueKey = repo#issueOrPr)
+          const issueKey = `${repo}#${issueOrPr}`;
+          if (!issueBreakdownTracker.has(contributor)) {
+            issueBreakdownTracker.set(contributor, {});
+          }
+          if (!issueBreakdownTracker.get(contributor)![issueKey]) {
+            issueBreakdownTracker.get(contributor)![issueKey] = 0;
+          }
+          issueBreakdownTracker.get(contributor)![issueKey] += analytics.total;
         }
       }
     }
+  }
+
+  // Populate issuePrCountBreakdown and issueBreakdown
+  for (const [contributor, entry] of leaderboard.entries()) {
+    const repoMap = issuePrTracker.get(contributor) || {};
+    for (const repo in repoMap) {
+      entry.issuePrCountBreakdown[repo] = repoMap[repo].size;
+    }
+    entry.issueBreakdown = issueBreakdownTracker.get(contributor) || {};
   }
 
   const result = Array.from(leaderboard.values()).sort((a, b) => b.totalXP - a.totalXP);
