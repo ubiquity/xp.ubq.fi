@@ -3,8 +3,7 @@ import type { OrgRepoStructure, ContributorAnalytics } from "../data-transform";
 // Define the structure for review metrics
 export type ReviewMetrics = {
   totalReviewsConducted: number; // Count of distinct review actions/groups
-  totalLinesAddedReviewed: number;
-  totalLinesDeletedReviewed: number;
+  totalLinesReviewed: number; // Sum of lines added and deleted in reviewed PRs
   totalReviewReward: number;
   averageReviewReward: number;
   pullsReviewedCount: number; // Count of unique PRs reviewed
@@ -28,8 +27,7 @@ export function calculateReviewMetrics(data: OrgRepoStructure): ReviewMetricsRes
   const tempMetrics: {
     [contributor: string]: {
       reviewCount: number;
-      linesAddedSum: number;
-      linesDeletedSum: number;
+      linesReviewedSum: number; // Changed from separate added/deleted
       rewardSum: number;
       reviewedPrUrls: Set<string>; // Track unique PR URLs reviewed
     };
@@ -46,8 +44,7 @@ export function calculateReviewMetrics(data: OrgRepoStructure): ReviewMetricsRes
         if (!tempMetrics[contributor]) {
           tempMetrics[contributor] = {
             reviewCount: 0,
-            linesAddedSum: 0,
-            linesDeletedSum: 0,
+            linesReviewedSum: 0, // Changed from separate added/deleted
             rewardSum: 0,
             reviewedPrUrls: new Set(),
           };
@@ -64,8 +61,8 @@ export function calculateReviewMetrics(data: OrgRepoStructure): ReviewMetricsRes
            if (Array.isArray(rewardGroup.reviews)) {
              userTempMetrics.reviewCount += rewardGroup.reviews.length; // Count individual review actions
              for (const review of rewardGroup.reviews) {
-               userTempMetrics.linesAddedSum += review.effect?.addition ?? 0;
-               userTempMetrics.linesDeletedSum += review.effect?.deletion ?? 0;
+               const linesChanged = (review.effect?.addition ?? 0) + (review.effect?.deletion ?? 0);
+               userTempMetrics.linesReviewedSum += linesChanged; // Sum added and deleted lines
                userTempMetrics.rewardSum += review.reward ?? 0;
              }
            }
@@ -80,8 +77,7 @@ export function calculateReviewMetrics(data: OrgRepoStructure): ReviewMetricsRes
     const count = totals.reviewCount;
     metrics[contributor] = {
       totalReviewsConducted: count,
-      totalLinesAddedReviewed: totals.linesAddedSum,
-      totalLinesDeletedReviewed: totals.linesDeletedSum,
+      totalLinesReviewed: totals.linesReviewedSum, // Use the summed value
       totalReviewReward: totals.rewardSum,
       averageReviewReward: count > 0 ? totals.rewardSum / count : 0,
       pullsReviewedCount: totals.reviewedPrUrls.size,

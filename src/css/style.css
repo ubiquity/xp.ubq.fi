@@ -309,6 +309,29 @@ text {
   width: 80px; /* Fixed width for values */
 }
 
+/* Styles for consolidated tables */
+.insights-table.consolidated {
+  table-layout: auto; /* Allow table to determine column widths */
+  width: 100%; /* Use full width */
+}
+
+.insights-table.consolidated th,
+.insights-table.consolidated td {
+  white-space: nowrap; /* Prevent text wrapping in cells */
+  text-align: right; /* Right-align numbers */
+  padding: 4px 8px; /* Consistent padding */
+}
+
+.insights-table.consolidated th:first-child,
+.insights-table.consolidated td:first-child {
+  text-align: left; /* Left-align contributor name */
+  font-weight: bold;
+  color: #fff;
+  width: auto; /* Allow contributor column to resize */
+  white-space: normal; /* Allow contributor name to wrap if needed */
+}
+
+
 .contributor-separator {
     border: 0;
     height: 1px;
