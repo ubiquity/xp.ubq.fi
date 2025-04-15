@@ -43,7 +43,7 @@ async function init() {
     let viewMode: ViewMode = "leaderboard";
     let selectedContributor: string = "All";
     let currentTimeValue: number = 0; // Current slider value (minutes since epoch)
-    let maxYValue: number = 1;
+    let globalMaxCumulativeXP: number = 1; // Renamed from maxYValue, represents overall max XP
     let ranks: { [contributor: string]: number } = {};
     let highestScorer: string | null = null;
     let globalMinTimeMs: number | null = null; // In milliseconds
@@ -120,6 +120,7 @@ async function init() {
           highlightContributor: selectedContributor !== "All" ? selectedContributor : leaderboardForRender[0]?.contributor,
           ranks: currentRanks, // Pass the recalculated ranks
           scaleMode: scaleMode,
+          overallMaxXP: globalMaxCumulativeXP // Pass the overall max XP for consistent scaling
         });
         // timeRangeText = ""; // REMOVED: Will set label text after if/else block
 
@@ -140,7 +141,7 @@ async function init() {
         renderTimeSeriesChart(filtered, chartArea, {
           // Do not pass fixed height, let the renderer use container height
           highlightContributor: selectedContributor !== "All" ? selectedContributor : (highestScorer ?? undefined),
-          maxYValue: maxYValue,
+          maxYValue: globalMaxCumulativeXP, // Pass overall max XP to timeline Y-axis
           ranks: ranks,
           minTime: globalMinTimeMs, // Pass fixed min/max time in MS
           maxTime: globalMaxTimeMs,
@@ -237,18 +238,21 @@ async function init() {
         contributorSelect.appendChild(opt);
       });
 
-      // --- Calculate Max Y Value ---
-      if (maxYValue === 1) { // Only calculate once
+      // --- Calculate Overall Max Cumulative XP (for Y-axis/Leaderboard scaling) ---
+      if (globalMaxCumulativeXP === 1) { // Only calculate once
         timeSeriesData.forEach(entry => {
           let cumulative = 0;
           entry.series.forEach(pt => {
             cumulative += pt.xp;
-            if (cumulative > maxYValue) maxYValue = cumulative;
+            if (cumulative > globalMaxCumulativeXP) globalMaxCumulativeXP = cumulative;
           });
         });
+        // Ensure it's at least 1 after calculation
+        globalMaxCumulativeXP = Math.max(1, globalMaxCumulativeXP);
       }
 
-      // --- Calculate Ranks ---
+
+      // --- Calculate Ranks (based on final leaderboard data) ---
       const scoresArray: [string, number][] = leaderboardData.map(entry => {
         return [entry.contributor, entry.totalXP];
       });

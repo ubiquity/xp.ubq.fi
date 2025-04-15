@@ -10,7 +10,7 @@ import type { TimeSeriesEntry } from "../data-transform";
 import { drawYAxisTicks } from "./chart-helpers/draw-y-axis-ticks";
 import { drawXAxisTicks } from "./chart-helpers/draw-x-axis-ticks";
 import { processChartData, type ProcessedContributorData } from "./chart-helpers/process-chart-data";
-import { drawLegend } from "./chart-helpers/draw-legend";
+// import { drawLegend } from "./chart-helpers/draw-legend"; // Removed import
 import { drawContributorLine } from "./chart-helpers/draw-contributor-line";
 
 // Define the structure for points mapped to SVG coordinates
@@ -267,7 +267,8 @@ export function renderTimeSeriesChart(
   xTitle.textContent = "Time";
   svg.appendChild(xTitle);
 
-  // --- Draw Legend using Helper ---
+  // --- Removed Legend ---
+  /*
   drawLegend({
     svg,
     svgNS,
@@ -280,4 +281,5 @@ export function renderTimeSeriesChart(
     GOOD,
     BAD,
   });
+  */
 }

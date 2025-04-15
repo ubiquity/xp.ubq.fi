@@ -61,39 +61,57 @@ export function drawContributorLine({
     scaleMode = 'linear', // Default to linear
 }: DrawContributorLineOptions): void {
 
-    // --- Opacity Calculation ---
-    let rankOpacity = 0.5;
-    const minRankOpacity = 0.2;
+    // --- Opacity Calculation (Remapped to 12.5%-87.5%) ---
+    const minTargetOpacity = 0.125; // New min
+    const maxTargetOpacity = 0.875; // New max
+    const targetRange = maxTargetOpacity - minTargetOpacity; // New range (0.75)
+
+    const originalMinRankOpacity = 0.2; // Previous minimum used for normalization base
+    const originalRankRange = 1.0 - originalMinRankOpacity; // 0.8
+
+    let baseMappedOpacity = minTargetOpacity; // Default to minimum if no rank
+
     if (ranks) {
         const rank = ranks[entry.contributor];
-        rankOpacity = (rank && rank > 0) ? Math.max(minRankOpacity, 1 / rank) : minRankOpacity;
+        // Calculate original rank opacity factor (0 to 1, where 1 is rank 1)
+        const originalRankFactor = rank && rank > 0
+            ? (1 / rank - originalMinRankOpacity) / originalRankRange // Normalize to 0-1 range based on old scale
+            : 0; // Rank 0 or undefined maps to the minimum
+        // Clamp factor between 0 and 1
+        const clampedFactor = Math.max(0, Math.min(1, originalRankFactor));
+        // Map to new range [0.25, 0.75]
+        baseMappedOpacity = minTargetOpacity + clampedFactor * targetRange;
     }
-    let targetOpacity = rankOpacity;
-    if (isError) { targetOpacity = 0.85; }
 
-    let modulatedOpacity = targetOpacity;
+    // Apply error state (capped at max target)
+    let targetOpacity = isError ? maxTargetOpacity : baseMappedOpacity;
+
+    // Apply animation progress
+    let finalOpacity = targetOpacity;
     if (animationProgress !== undefined && animationProgress < 1) {
-        modulatedOpacity = targetOpacity * animationProgress;
+        // Fade in from 0 opacity towards the target opacity
+        finalOpacity = targetOpacity * animationProgress;
+        // Ensure it doesn't go below a minimum visibility threshold during animation if desired,
+        // but for now, let it fade from 0.
     }
 
-    let finalLineOpacity = modulatedOpacity * 0.5;
-    let finalPointOpacity = Math.min(1.0, finalLineOpacity + 0.25);
+    // Ensure final opacity respects the target floor, unless fully faded out by animation
+    finalOpacity = Math.max(animationProgress === 0 ? 0 : minTargetOpacity, finalOpacity);
+    // Ensure final opacity respects the target ceiling
+    finalOpacity = Math.min(maxTargetOpacity, finalOpacity);
 
-    // Removed the special case for isHighlight
-    // if (isHighlight) {
-    //     finalLineOpacity = 1.0 * (animationProgress ?? 1);
-    //     finalPointOpacity = 1.0 * (animationProgress ?? 1);
-    // }
+    // Use the same final opacity for line and points for simplicity now
+    const finalLineOpacity = finalOpacity;
+    const finalPointOpacity = finalOpacity;
 
-    // Error state still overrides opacity
+    // Note: The previous logic slightly boosted point opacity.
+    // This is removed to strictly adhere to the 25-75% range.
+    // The !isHighlight && !isError check is also implicitly handled by the remapping.
     if (isError) {
-        finalLineOpacity = 0.85; // Keep error highlight strong
-        finalPointOpacity = 0.85; // Keep error highlight strong
-    }
-
-    if (!isHighlight && !isError) {
-        finalLineOpacity = Math.max(0.05, finalLineOpacity);
-        finalPointOpacity = Math.max(0.05, finalPointOpacity);
+        // Error state still uses the max target opacity
+        // finalLineOpacity = maxTargetOpacity;
+        // finalPointOpacity = maxTargetOpacity;
+        // This is already handled above by setting targetOpacity = isError ? maxTargetOpacity : ...
     }
 
     // --- Map Points to SVG Coords ---
