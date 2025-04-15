@@ -89,13 +89,26 @@ export function drawContributorLine({
 
     let targetOpacity = isError ? maxTargetOpacity : baseMappedOpacity;
 
+    // If highlighted (filtered view), force full opacity
+    if (isHighlight) {
+        targetOpacity = 1.0;
+    }
+
     let finalOpacity = targetOpacity;
     if (animationProgress !== undefined && animationProgress < 1) {
+        // Apply animation progress, but respect the target (1.0 for highlight)
         finalOpacity = targetOpacity * animationProgress;
     }
 
-    finalOpacity = Math.max(animationProgress === 0 ? 0 : minTargetOpacity, finalOpacity);
-    finalOpacity = Math.min(maxTargetOpacity, finalOpacity);
+    // Adjust clamping: only apply min/max target range if NOT highlighted
+    if (!isHighlight) {
+        finalOpacity = Math.max(animationProgress === 0 ? 0 : minTargetOpacity, finalOpacity);
+        finalOpacity = Math.min(maxTargetOpacity, finalOpacity);
+    } else {
+        // If highlighted, ensure it stays 1.0 unless animation is 0
+        finalOpacity = animationProgress === 0 ? 0 : 1.0;
+    }
+
 
     const finalLineOpacity = finalOpacity;
     const finalPointOpacity = finalOpacity;
