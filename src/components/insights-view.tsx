@@ -31,9 +31,10 @@ export function InsightsView({
   container.className = "insights-view";
 
   // --- State for Sorting (Consolidated View Only) ---
-  let overviewSort: SortConfig = { key: 'contributor', dir: 'asc' };
-  let qualitySort: SortConfig = { key: 'contributor', dir: 'asc' };
-  let reviewsSort: SortConfig = { key: 'contributor', dir: 'asc' };
+  // Default sort for each table is now its specific total column, descending.
+  let overviewSort: SortConfig = { key: 'overviewXpSum', dir: 'desc' };
+  let qualitySort: SortConfig = { key: 'totalCommentXp', dir: 'desc' };
+  let reviewsSort: SortConfig = { key: 'totalReviewReward', dir: 'desc' };
 
   // --- Get Base Contributor List ---
   // Sort initially by overall totalXP descending for the base list
@@ -145,8 +146,9 @@ export function InsightsView({
       // Use a calculated key for sorting the summed XP
       overviewHead.appendChild(createHeader('Overview XP', 'overviewXpSum', overviewSort, 'overview'));
       const overviewBody = overviewTable.createTBody();
-      const sortedOverviewContributors = sortContributors(baseContributors, overviewSort, overviewData);
-      sortedOverviewContributors.forEach(contributor => {
+      // Always sort based on the current overviewSort state (default is now overviewXpSum desc)
+      const overviewContributorsToRender = sortContributors(baseContributors, overviewSort, overviewData);
+      overviewContributorsToRender.forEach(contributor => {
         const overview = overviewData[contributor];
         const row = overviewBody.insertRow();
         const categoryXp = (overview?.tasksXp ?? 0) +
@@ -179,8 +181,9 @@ export function InsightsView({
       qualityHead.appendChild(createHeader('Relevance', 'averageRelevanceScore', qualitySort, 'quality'));
       qualityHead.appendChild(createHeader('Comment XP', 'totalCommentXp', qualitySort, 'quality')); // Use specific category XP key
       const qualityBody = qualityTable.createTBody();
-      const sortedQualityContributors = sortContributors(baseContributors, qualitySort, qualityData);
-      sortedQualityContributors.forEach(contributor => {
+      // Always sort based on the current qualitySort state (default is now totalCommentXp desc)
+      const qualityContributorsToRender = sortContributors(baseContributors, qualitySort, qualityData);
+      qualityContributorsToRender.forEach(contributor => {
         const quality = qualityData[contributor];
         const row = qualityBody.insertRow();
         row.innerHTML = `
@@ -206,8 +209,9 @@ export function InsightsView({
       reviewHead.appendChild(createHeader('Review XP', 'totalReviewReward', reviewsSort, 'reviews')); // Changed header, key is correct for category total
       // Removed Avg Reward header
       const reviewBody = reviewTable.createTBody();
-      const sortedReviewContributors = sortContributors(baseContributors, reviewsSort, reviewData);
-      sortedReviewContributors.forEach(contributor => {
+      // Always sort based on the current reviewsSort state (default is now totalReviewReward desc)
+      const reviewContributorsToRender = sortContributors(baseContributors, reviewsSort, reviewData);
+      reviewContributorsToRender.forEach(contributor => {
         const reviews = reviewData[contributor];
         const row = reviewBody.insertRow();
         row.innerHTML = `

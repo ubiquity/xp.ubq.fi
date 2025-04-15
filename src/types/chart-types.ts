@@ -11,6 +11,7 @@ export enum ChartType {
   HEATMAP = 'HEATMAP',
   RADAR = 'RADAR',
   TABLE = 'TABLE',
+  LEADERBOARD = 'LEADERBOARD', // Added for the contributor leaderboard
 }
 
 export interface ChartConfig {

@@ -1,12 +1,25 @@
 import React, { useEffect, useState } from 'react';
-import type { ChartConfig, ChartTypeRecommendation } from '../types/chart-types';
+import { ChartType, type ChartConfig, type ChartTypeRecommendation } from '../types/chart-types'; // Import ChartType
 import type { DataDimension } from '../types/data-types';
+import type { LeaderboardEntry, TimeSeriesEntry } from '../data-transform'; // Import specific types
+import type { OverviewResult } from '../analytics/contribution-overview';
+import type { QualityResult } from '../analytics/comment-quality';
+import type { ReviewMetricsResult } from '../analytics/review-metrics';
 import { generateChartConfig, recommendChartType } from '../utils/chart-config-engine';
-import { transformDataForVisualization } from '../utils/data-transformer';
+import { transformDataForVisualization } from '../utils/data-transformer'; // Keep for now, but usage will change
 import ChartFactory from '../visualizations/chart-factory';
 
+// Define the structure for the comprehensive data state (mirrors dashboard.tsx)
+type DashboardDataState = {
+  leaderboard: LeaderboardEntry[];
+  timeSeries: TimeSeriesEntry[];
+  overview: OverviewResult | null;
+  quality: QualityResult | null;
+  reviews: ReviewMetricsResult | null;
+};
+
 interface VisualizationPanelProps {
-  data: any[];
+  data: DashboardDataState | null; // Update data prop type
   selectedDimensions: DataDimension[];
   issueFilter?: string; // Add optional issue filter prop
   width?: number;
@@ -45,15 +58,31 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
     }
   }, [selectedDimensions]);
 
-  // Transform data when dimensions or chart config changes
+  // Set transformed data based on chart type when data or config changes
   useEffect(() => {
-    if (data.length > 0 && selectedDimensions.length > 0 && chartConfig) {
-      const transformed = transformDataForVisualization(data, selectedDimensions);
-      setTransformedData(transformed);
+    // Ensure data and chartConfig are available
+    if (data && chartConfig) {
+      if (chartConfig.type === ChartType.LEADERBOARD) {
+        // For leaderboard, use the pre-sorted leaderboard data directly
+        setTransformedData(data.leaderboard || []);
+      } else if (chartConfig.type === ChartType.LINE || chartConfig.type === ChartType.AREA) {
+        // For time series charts, use the timeSeries data
+        setTransformedData(data.timeSeries || []);
+      } else {
+        // For other chart types, the old transformation logic needs rework.
+        // The old transformer expects ActivityData[] which we don't pass anymore.
+        console.warn(`Data transformation for chart type ${chartConfig.type} needs rework based on DashboardDataState.`);
+        // Old logic (INCOMPATIBLE):
+        // const transformed = transformDataForVisualization(data, selectedDimensions);
+        // setTransformedData(transformed);
+        setTransformedData([]); // Set empty for now to avoid errors
+      }
     } else {
-      setTransformedData([]);
+      setTransformedData([]); // Reset if data or config is missing
     }
-  }, [data, selectedDimensions, chartConfig]);
+    // Dependency array updated: selectedDimensions no longer directly drives transformation here for all cases.
+    // Transformation depends on the *type* of chart selected and the structure of `data`.
+  }, [data, chartConfig]);
 
   // Select a different chart type from the recommendations
   const handleChartTypeChange = (chartType: string) => {

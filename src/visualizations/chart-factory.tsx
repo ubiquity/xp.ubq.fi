@@ -1,9 +1,10 @@
 import React, { useEffect, useRef } from 'react'; // Add useEffect, useRef
 import { ChartType, type ChartConfig } from '../types/chart-types';
-import type { TimeSeriesEntry } from '../data-transform'; // Import TimeSeriesEntry
+import type { TimeSeriesEntry, LeaderboardEntry } from '../data-transform'; // Import TimeSeriesEntry AND LeaderboardEntry
 import { renderTimeSeriesChart } from '../visualization/time-series-chart'; // Import the custom renderer
 import BarChart from './bar-chart';
 import BaseChart from './base-chart';
+import LeaderboardChart from './leaderboard-chart'; // Import the new leaderboard chart
 // Remove LineChart import if it's only used for the custom chart now
 // import LineChart from './line-chart';
 
@@ -87,6 +88,17 @@ const ChartFactory: React.FC<ChartFactoryProps> = ({
       }, [data, config, width, height, issueFilter]); // Re-render if these change
 
       return <div ref={containerRef} className={`chart-container ${className}`} style={{ width, height }}></div>;
+
+    case ChartType.LEADERBOARD:
+      // Ensure data is in LeaderboardEntry[] format
+      const leaderboardData = data as LeaderboardEntry[];
+      return (
+        <LeaderboardChart
+          data={leaderboardData}
+          className={className}
+          // Pass config if needed later
+        />
+      );
 
     // For MVP, we'll implement a subset of chart types
     // Future implementations would add more chart types here

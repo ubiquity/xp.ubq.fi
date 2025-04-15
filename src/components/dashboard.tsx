@@ -1,48 +1,86 @@
-import React, { useEffect, useState, useMemo } from 'react'; // Add useMemo
-import { fetchActivityData } from '../api/activity-data-service';
+import React, { useEffect, useState } from 'react';
+import { loadArtifactData } from '../workers/artifact-worker-manager'; // Use worker manager
+import type { LeaderboardEntry, TimeSeriesEntry } from '../data-transform'; // Import specific types
+import type { OverviewResult } from '../analytics/contribution-overview';
+import type { QualityResult } from '../analytics/comment-quality';
+import type { ReviewMetricsResult } from '../analytics/review-metrics';
 import type { DataDimension } from '../types/data-types';
 import { DataDimensionCategory } from '../types/data-types';
 import DimensionSelector from './dimension-selector';
 import VisualizationPanel from './visualization-panel';
 
 /**
- * Main dashboard component that integrates all the pieces together
  */
+
+// Define the structure for the comprehensive data state
+type DashboardDataState = {
+  leaderboard: LeaderboardEntry[];
+  timeSeries: TimeSeriesEntry[];
+  overview: OverviewResult | null;
+  quality: QualityResult | null;
+  reviews: ReviewMetricsResult | null;
+  // rawData?: OrgRepoData; // Optionally store raw data if needed elsewhere
+};
+
 const Dashboard: React.FC = () => {
-  // State for data and loading
-  const [activityData, setActivityData] = useState<any[]>([]);
+  // State for the comprehensive data object
+  const [dashboardData, setDashboardData] = useState<DashboardDataState | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [loadingProgress, setLoadingProgress] = useState<{ phase: string; percent: number; detail: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // State for dimensions and selections
+  // State for dimensions and selections (remains the same)
   const [availableDimensions, setAvailableDimensions] = useState<DataDimension[]>([]);
   const [selectedDimensions, setSelectedDimensions] = useState<DataDimension[]>([]);
   const [issueFilter, setIssueFilter] = useState<string>(''); // State for issue filter
 
-  // Fetch data on component mount
+  // Fetch data using loadArtifactData on component mount
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setIsLoading(true);
-        const data = await fetchActivityData();
-        setActivityData(data);
+    // TODO: Get the runId dynamically, perhaps from URL params or a selector
+    const runId = 'latest'; // Placeholder
 
-        // Generate available dimensions from the data
-        if (data.length > 0) {
-          setAvailableDimensions(generateDimensionsFromData(data));
-        }
+    setIsLoading(true);
+    setLoadingProgress({ phase: 'Initializing', percent: 0, detail: 'Starting artifact load...' });
+    setError(null);
 
-        setError(null);
-      } catch (err) {
-        console.error('Error fetching data:', err);
-        setError('Failed to load activity data. Please try again later.');
-      } finally {
+    loadArtifactData(runId, {
+      onProgress: (phase, percent, detail) => {
+        setLoadingProgress({ phase, percent, detail });
+      },
+      onError: (err) => {
+        console.error('Error loading artifact data:', err);
+        setError(`Failed to load data for run ${runId}: ${err.message}`);
         setIsLoading(false);
-      }
-    };
+        setLoadingProgress(null);
+      },
+      onComplete: (data) => {
+        setDashboardData({
+          leaderboard: data.leaderboard,
+          timeSeries: data.timeSeries,
+          overview: data.overview,
+          quality: data.quality,
+          reviews: data.reviews,
+          // rawData: data.rawData // Optionally store raw data
+        });
 
-    fetchData();
-  }, []);
+        // Generate dimensions (needs adjustment based on the new data structure)
+        // For now, we might use predefined dimensions or adapt generateDimensionsFromData
+        // Let's use the existing generator for now, acknowledging it might not be ideal
+        // It expects ActivityData[], so we might pass an empty array or adapt it later.
+        // Passing an empty array to avoid errors, dimension generation needs rework.
+        setAvailableDimensions(generateDimensionsFromData([])); // Needs rework
+
+        setIsLoading(false);
+        setLoadingProgress(null);
+        setError(null);
+      }
+    });
+
+    // Cleanup function if needed (e.g., terminate worker)
+    // return () => {
+    //   cleanupWorker();
+    // };
+  }, []); // Run only once on mount
 
   // Handler for selecting a dimension
   const handleSelectDimension = (dimension: DataDimension) => {
@@ -54,12 +92,18 @@ const Dashboard: React.FC = () => {
     setSelectedDimensions(selectedDimensions.filter(dim => dim.id !== dimension.id));
   };
 
-  // Show loading state
+  // Show loading state with progress
   if (isLoading) {
     return (
       <div className="dashboard loading">
-        <h2>Loading Developer Performance Dashboard...</h2>
-        <div className="loading-indicator">Loading...</div>
+        <h2>Loading Developer Performance Data...</h2>
+        {loadingProgress && (
+          <div className="loading-progress">
+            <progress value={loadingProgress.percent} max="100"></progress>
+            <span>{`${loadingProgress.phase}: ${loadingProgress.detail} (${loadingProgress.percent.toFixed(0)}%)`}</span>
+          </div>
+        )}
+        <div className="loading-indicator">Please wait...</div>
       </div>
     );
   }
@@ -68,9 +112,10 @@ const Dashboard: React.FC = () => {
   if (error) {
     return (
       <div className="dashboard error">
-        <h2>Error</h2>
+        <h2>Error Loading Data</h2>
         <div className="error-message">{error}</div>
-        <button onClick={() => window.location.reload()}>Retry</button>
+        {/* Consider a more specific retry mechanism if possible */}
+        <button onClick={() => window.location.reload()}>Retry Page Load</button>
       </div>
     );
   }
@@ -104,12 +149,19 @@ const Dashboard: React.FC = () => {
         </div>
 
         <div className="dashboard-main">
-          <VisualizationPanel
-            data={activityData} // Pass original data for now, filtering will happen downstream
-            selectedDimensions={selectedDimensions}
-            width={800}
-            height={500}
-          />
+          {/* Pass the relevant data down. For now, pass the whole object.
+              VisualizationPanel will need adaptation. */}
+          {dashboardData ? (
+            <VisualizationPanel
+              data={dashboardData} // Pass the whole structured object
+              selectedDimensions={selectedDimensions}
+              issueFilter={issueFilter} // Pass filter down
+              width={800} // Example width
+              height={600} // Example height
+            />
+          ) : (
+            <div className="placeholder">Select data or wait for load.</div> // Placeholder if data not yet loaded
+          )}
         </div>
       </main>
     </div>
