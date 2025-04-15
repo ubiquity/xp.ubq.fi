@@ -1,5 +1,5 @@
 {
-  "name": "bun-esbuild-frontend",
+  "name": "xp.ubq.fi",
   "version": "0.1.0",
   "scripts": {
     "build": "bun run tools/build.ts",
