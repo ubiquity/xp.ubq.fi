@@ -8,6 +8,12 @@
   --chart-color-grey: #888;
   --chart-color-grey-light: #ccc;
   --chart-color-bg: transparent;
+  /* Tooltip */
+  --chart-tooltip-bg: rgba(0, 0, 0, 0.95); /* Increased opacity */
+  --chart-tooltip-text: #ffffff;
+  --chart-tooltip-border: #444;
+  /* Warning: yellow/gold */
+  --chart-color-warning: #ffd700;
 }
 
 #xp-analytics-chart-area {
@@ -19,4 +25,35 @@
 .xp-analytics-svg {
   display: block;
   width: 100%;
+}
+
+.chart-tooltip {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.chart-tooltip-bg {
+  fill: var(--chart-tooltip-bg);
+  stroke: var(--chart-tooltip-border);
+  stroke-width: 1px;
+  rx: 4px;
+  ry: 4px;
+}
+
+.chart-tooltip-text {
+  fill: var(--chart-tooltip-text);
+  font-size: 12px;
+  font-family: monospace; /* For better alignment of separators */
+  pointer-events: none;
+}
+
+.chart-tooltip tspan {
+}
+
+/* Use monospace for separator lines */
+.chart-tooltip tspan:nth-child(2),
+.chart-tooltip tspan:nth-child(6) {
+  font-family: monospace;
+  opacity: 0.5;
 }

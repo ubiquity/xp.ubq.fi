@@ -67,7 +67,7 @@ export function renderTimeSeriesChart(
   const width = options?.width ?? (container.clientWidth || container.getBoundingClientRect().width || 600);
   const height = options?.height ?? (container.clientHeight || container.getBoundingClientRect().height || 320);
   const startRadius = 48;
-  const endRadius = 2;
+  const endRadius = 4;
 
   // Calculate dynamic margins based on label widths
   const tempSvg = document.createElementNS(svgNS, "svg");

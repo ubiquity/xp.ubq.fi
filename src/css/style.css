@@ -65,6 +65,7 @@ select {
   font-size: 12px;
   padding: 8px 16px;
   /* min-width: 160px; */
+  border-radius: 4px;
 }
 .xp-analytics-view-toggle {
   margin-left: 32px;
@@ -73,7 +74,7 @@ select {
   border-radius: 4px;
   border: none;
   background: #222;
-  color: #00e0ff;
+  color: #fff;
   cursor: pointer;
 }
 .xp-analytics-flex-spacer {
@@ -215,5 +216,11 @@ input#time-range::-moz-range-track {
 
 text {
     user-select: none;
+    /* Keep pointer-events: none; globally for non-interactive text like axes */
     pointer-events: none;
+}
+
+/* Allow pointer events specifically for warning symbols so tooltips work */
+.chart-warning-symbol {
+    pointer-events: auto;
 }

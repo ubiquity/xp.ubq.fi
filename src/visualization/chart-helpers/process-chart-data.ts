@@ -5,10 +5,17 @@
  */
 import type { TimeSeriesEntry } from "../../data-transform";
 
-// Define the structure for points with cumulative XP
+import type { CommentScoreDetails } from "../../data-transform"; // Import the score details type
+
+// Define the structure for points with cumulative XP and event details
 type CumulativePoint = {
   time: number;
-  xp: number;
+  xp: number; // This will store the *cumulative* XP at this point in time
+  eventType: string;
+  url?: string;
+  pointXP: number; // Store the XP gained *at this specific point*
+  scoreDetails?: CommentScoreDetails; // Add optional score details
+  contentPreview?: string; // Add optional content preview
 };
 
 // Define the output structure for processed data
@@ -31,11 +38,19 @@ export function processChartData({
     const sortedSeries = [...entry.series].sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
     let cumulative = 0;
 
-    // Calculate cumulative points
+    // Calculate cumulative points, including event details
     const allCalculatedPoints: CumulativePoint[] = sortedSeries.map(pt => {
-      cumulative += pt.xp;
+      cumulative += pt.xp; // Update cumulative XP
       const pointTime = new Date(pt.time).getTime();
-      return { time: pointTime, xp: cumulative };
+      return {
+        time: pointTime,
+        xp: cumulative, // Store cumulative XP
+        eventType: pt.eventType, // Pass through eventType
+        url: pt.url, // Pass through url
+        pointXP: pt.xp, // Store the XP for this specific point
+        scoreDetails: pt.scoreDetails, // Pass through score details
+        contentPreview: pt.contentPreview // Pass through content preview
+      };
     });
 
     // Filter points based on cutoffTimeMs for line drawing and interpolate the last segment
@@ -87,7 +102,17 @@ export function processChartData({
              const fraction = (cutoffTimeMs - prevPoint.time) / timeDiff;
              const interpolatedXP = prevPoint.xp + (nextPoint.xp - prevPoint.xp) * fraction;
              // Add the interpolated point at the exact cutoff time
-             pointsToRenderForLine.push({ time: cutoffTimeMs, xp: interpolatedXP });
+             // Need to decide what eventType/url/pointXP to assign to interpolated points
+             // For now, let's use the previous point's details, but mark pointXP as 0
+             pointsToRenderForLine.push({
+               time: cutoffTimeMs,
+               xp: interpolatedXP,
+               eventType: prevPoint.eventType, // Use previous point's type
+               url: prevPoint.url, // Use previous point's url
+               pointXP: 0, // Interpolated point has 0 specific XP gain
+               scoreDetails: undefined, // Interpolated points don't have specific score details
+               contentPreview: undefined // Interpolated points don't have content preview
+             });
            }
            // If timeDiff is 0 (duplicate times), just use the point at lastVisibleIndex
         }
