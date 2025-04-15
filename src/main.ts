@@ -52,6 +52,7 @@ async function init() {
     let globalMaxTimeMins: number = 0; // In minutes since epoch
     let isAnimating: boolean = false; // Flag to control fade-in
     let scaleMode: 'linear' | 'log' = 'linear'; // Add scale mode state
+    let issueFilterValue: string = ''; // State for issue filter input
 
     // --- UI Elements ---
     const root = document.getElementById("xp-analytics-root")!;
@@ -59,6 +60,7 @@ async function init() {
     const contributorSelect = document.getElementById("contributor-select") as HTMLSelectElement;
     const viewToggle = document.getElementById("view-toggle") as HTMLButtonElement;
     const scaleToggle = document.getElementById("scale-toggle") as HTMLButtonElement; // Get scale toggle button
+    const issueFilterInput = document.getElementById("issue-filter-input") as HTMLInputElement; // Get issue filter input
     const timeRange = document.getElementById("time-range") as HTMLInputElement;
     const contextLabel = document.getElementById("xp-analytics-context-label") as HTMLSpanElement;
     const avatarImg = document.getElementById("xp-analytics-org-avatar") as HTMLImageElement;
@@ -126,9 +128,19 @@ async function init() {
 
       } else { // Time Series View
         // Filter time series data by contributor if not "All"
-        let filtered = selectedContributor === "All"
+        let filteredByContributor = selectedContributor === "All"
           ? timeSeriesData
           : timeSeriesData.filter((entry) => entry.contributor === selectedContributor);
+
+        // Apply issue filter if set
+        let filteredDataForChart = filteredByContributor;
+        const currentIssueFilter = issueFilterValue.trim();
+        if (currentIssueFilter.length > 0) {
+            filteredDataForChart = filteredByContributor.map(contributorEntry => {
+                const filteredSeries = contributorEntry.series.filter(point => point.issueOrPr === currentIssueFilter);
+                return { ...contributorEntry, series: filteredSeries };
+            }).filter(contributorEntry => contributorEntry.series.length > 0);
+        }
 
         // Cutoff time already calculated above
         // Filtering is handled within renderTimeSeriesChart based on cutoffTimeMs
@@ -138,7 +150,7 @@ async function init() {
           ? (currentTimeValue - globalMinTimeMins) / (globalMaxTimeMins - globalMinTimeMins)
           : 1; // Default to 1 (no fade) if not animating or range is zero
 
-        renderTimeSeriesChart(filtered, chartArea, {
+        renderTimeSeriesChart(filteredDataForChart, chartArea, { // Pass the filtered data
           // Do not pass fixed height, let the renderer use container height
           highlightContributor: selectedContributor !== "All" ? selectedContributor : (highestScorer ?? undefined),
           maxYValue: globalMaxCumulativeXP, // Pass overall max XP to timeline Y-axis
@@ -342,6 +354,16 @@ async function init() {
       render();
     });
 
+    issueFilterInput.addEventListener("input", () => {
+      issueFilterValue = issueFilterInput.value;
+      isAnimating = false; // Stop animation if user interacts
+      // Re-render the current view (only timeseries is affected by this filter)
+      if (viewMode === 'timeseries') {
+        render();
+      }
+      // Note: Leaderboard view is not affected by issue filter in this implementation
+    });
+
     // --- Load Data (only if runId is valid) ---
     if (runId) {
       root.style.position = "relative"; // Needed for overlay positioning
@@ -436,7 +458,9 @@ async function init() {
       // Hide elements that depend on run data
       if (contributorSelect) contributorSelect.style.display = 'none';
       if (viewToggle) viewToggle.style.display = 'none';
-      if (timeRange) timeRange.parentElement?.style.display === 'none'; // Hide slider container
+      if (scaleToggle) scaleToggle.style.display = 'none';
+      if (issueFilterInput?.parentElement) issueFilterInput.parentElement.style.display = 'none'; // Hide filter group
+      if (timeRange?.parentElement) timeRange.parentElement.style.display = 'none'; // Hide slider container
       if (contextLabel) contextLabel.textContent = 'No Report Selected';
       if (avatarImg) avatarImg.style.display = 'none';
     }

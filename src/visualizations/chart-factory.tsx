@@ -1,12 +1,16 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react'; // Add useEffect, useRef
 import { ChartType, type ChartConfig } from '../types/chart-types';
+import type { TimeSeriesEntry } from '../data-transform'; // Import TimeSeriesEntry
+import { renderTimeSeriesChart } from '../visualization/time-series-chart'; // Import the custom renderer
 import BarChart from './bar-chart';
 import BaseChart from './base-chart';
-import LineChart from './line-chart';
+// Remove LineChart import if it's only used for the custom chart now
+// import LineChart from './line-chart';
 
 interface ChartFactoryProps {
   config: ChartConfig;
   data: any[];
+  issueFilter?: string; // Add optional issue filter prop
   width?: number;
   height?: number;
   className?: string;
@@ -18,6 +22,7 @@ interface ChartFactoryProps {
 const ChartFactory: React.FC<ChartFactoryProps> = ({
   config,
   data,
+  issueFilter, // Destructure the new prop
   width = 600,
   height = 400,
   className = ''
@@ -58,17 +63,30 @@ const ChartFactory: React.FC<ChartFactoryProps> = ({
         />
       );
 
-    case ChartType.LINE:
-    case ChartType.AREA:
-      return (
-        <LineChart
-          config={config}
-          data={data}
-          width={width}
-          height={height}
-          className={className}
-        />
-      );
+    case ChartType.LINE: // Assuming LINE is used for our custom time series
+    case ChartType.AREA: // Assuming AREA is also used for our custom time series
+      // Use a container div and call the custom rendering function
+      const containerRef = useRef<HTMLDivElement>(null);
+
+      useEffect(() => {
+        if (containerRef.current && data && data.length > 0) {
+          // Ensure data is in the expected TimeSeriesEntry[] format
+          // This might require adjustment based on how data is transformed upstream
+          const timeSeriesData = data as TimeSeriesEntry[];
+
+          renderTimeSeriesChart(timeSeriesData, containerRef.current, {
+            width,
+            height,
+            // Pass other relevant options from config if needed
+            // e.g., highlightContributor: config.options?.highlight,
+            // ranks: config.options?.ranks,
+            scaleMode: config.options?.scaleMode as ('linear' | 'log' | undefined),
+            issueFilter: issueFilter // Pass the filter here
+          });
+        }
+      }, [data, config, width, height, issueFilter]); // Re-render if these change
+
+      return <div ref={containerRef} className={`chart-container ${className}`} style={{ width, height }}></div>;
 
     // For MVP, we'll implement a subset of chart types
     // Future implementations would add more chart types here

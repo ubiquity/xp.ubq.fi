@@ -8,6 +8,7 @@ import ChartFactory from '../visualizations/chart-factory';
 interface VisualizationPanelProps {
   data: any[];
   selectedDimensions: DataDimension[];
+  issueFilter?: string; // Add optional issue filter prop
   width?: number;
   height?: number;
 }
@@ -18,6 +19,7 @@ interface VisualizationPanelProps {
 const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
   data,
   selectedDimensions,
+  issueFilter, // Destructure the new prop
   width = 800,
   height = 500
 }) => {
@@ -119,7 +121,8 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         {chartConfig && transformedData.length > 0 ? (
           <ChartFactory
             config={chartConfig}
-            data={transformedData}
+            data={transformedData} // Data is already transformed, filtering happens inside ChartFactory/TimeSeriesChart
+            issueFilter={issueFilter} // Pass the filter down
             width={width}
             height={height - 100} // Adjust for chart options height
           />

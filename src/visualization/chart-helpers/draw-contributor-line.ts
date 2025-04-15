@@ -11,6 +11,7 @@ type SvgPoint = {
     time: number;
     xp: number; // Note: This is cumulative XP from process-chart-data
     eventType: string;
+    issueOrPr: string; // Add issue/PR identifier
     url?: string;
     scoreDetails?: CommentScoreDetails; // Add score details
     contentPreview?: string; // Add content preview
@@ -136,6 +137,7 @@ export function drawContributorLine({
             xp: pt.xp, // Cumulative XP
             pointXP: pt.pointXP, // XP for this specific point
             eventType: pt.eventType,
+            issueOrPr: pt.issueOrPr, // Pass through issue/PR identifier
             url: pt.url,
             scoreDetails: pt.scoreDetails,
             contentPreview: pt.contentPreview
@@ -326,6 +328,7 @@ export function drawContributorLine({
                     `${entry.contributor}`,
                     '──────────',
                     rankText,
+                    `Issue/PR: #${pt.issueOrPr}`, // Add Issue/PR number
                     `Role: ${eventTypeText}`,
                     `XP: ${pointXP} (${percentageOfTotal}%)`, // Show point XP and its % of current total
                     `Total XP: ${totalXP}`,

@@ -78,6 +78,31 @@ select {
   color: #fff;
   cursor: pointer;
 }
+
+/* Issue Filter Styles */
+.xp-analytics-filter-group {
+  display: flex;
+  align-items: center;
+  margin-left: 16px; /* Add some space from the spacer */
+}
+
+.xp-analytics-filter-label {
+  font-size: 12px;
+  color: #ccc;
+  margin-right: 8px;
+  white-space: nowrap; /* Prevent label wrapping */
+}
+
+.xp-analytics-filter-input {
+  font-size: 12px;
+  padding: 8px 12px; /* Match select padding */
+  border-radius: 4px;
+  border: 1px solid #444; /* Slightly visible border */
+  background-color: #222; /* Match button background */
+  color: #fff; /* Match button text color */
+  width: 150px; /* Adjust width as needed */
+}
+
 .xp-analytics-flex-spacer {
   flex: 1;
 }

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react'; // Add useMemo
 import { fetchActivityData } from '../api/activity-data-service';
 import type { DataDimension } from '../types/data-types';
 import { DataDimensionCategory } from '../types/data-types';
@@ -17,6 +17,7 @@ const Dashboard: React.FC = () => {
   // State for dimensions and selections
   const [availableDimensions, setAvailableDimensions] = useState<DataDimension[]>([]);
   const [selectedDimensions, setSelectedDimensions] = useState<DataDimension[]>([]);
+  const [issueFilter, setIssueFilter] = useState<string>(''); // State for issue filter
 
   // Fetch data on component mount
   useEffect(() => {
@@ -89,11 +90,22 @@ const Dashboard: React.FC = () => {
             onRemoveDimension={handleRemoveDimension}
             maxSelections={3}
           />
+          {/* Add Issue Filter Input */}
+          <div className="dashboard-filter">
+            <label htmlFor="issue-filter">Filter by Issue #:</label>
+            <input
+              type="text"
+              id="issue-filter"
+              value={issueFilter}
+              onChange={(e) => setIssueFilter(e.target.value)}
+              placeholder="e.g., 249"
+            />
+          </div>
         </div>
 
         <div className="dashboard-main">
           <VisualizationPanel
-            data={activityData}
+            data={activityData} // Pass original data for now, filtering will happen downstream
             selectedDimensions={selectedDimensions}
             width={800}
             height={500}
