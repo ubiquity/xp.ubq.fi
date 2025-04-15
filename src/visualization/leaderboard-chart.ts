@@ -29,6 +29,9 @@ export function renderLeaderboardChart(
     repoKeys?: string[]; // Optional: consistent repo order
     highlightContributor?: string; // Optionally highlight a contributor
     errorContributors?: string[]; // Optionally mark contributors as "bad"
+    ranks?: { [contributor: string]: number }; // Add ranks option
+    scaleMode?: 'linear' | 'log'; // Add scale mode option
+    overallMaxXP?: number; // Add option for overall max XP for consistent scaling
   }
 ) {
   // Get CSS variables
@@ -55,12 +58,17 @@ export function renderLeaderboardChart(
   tempSvg.style.visibility = "hidden";
   document.body.appendChild(tempSvg);
 
-  // Measure contributor label widths
+  // Measure contributor label widths (including potential rank)
   let maxContributorWidth = 0;
+  const ranks = options?.ranks ?? {};
   data.forEach(entry => {
+    const rank = ranks[entry.contributor];
+    const rankPrefix = rank ? `#${rank} ` : ""; // Add "#rank " prefix if rank exists
+    const labelText = `${rankPrefix}${entry.contributor}`;
+
     const label = document.createElementNS(svgNS, "text");
     label.setAttribute("font-size", "16");
-    label.textContent = entry.contributor;
+    label.textContent = labelText; // Use text with prefix for measurement
     tempSvg.appendChild(label);
     const labelWidth = label.getBBox().width;
     maxContributorWidth = Math.max(maxContributorWidth, labelWidth);
@@ -93,8 +101,10 @@ export function renderLeaderboardChart(
     new Set(data.flatMap(entry => Object.keys(entry.issueBreakdown)))
   );
 
-  // Find max XP for scaling
-  const maxXP = Math.max(...data.map(entry => entry.totalXP), 1);
+  // Find max XP of currently displayed data (for bar widths relative to current view)
+  const currentMaxXP = Math.max(...data.map(entry => entry.totalXP), 1);
+  // Use overallMaxXP for axis/grid/tick scaling if provided, otherwise use current max
+  const maxXP = options?.overallMaxXP ?? currentMaxXP;
 
   // SVG root
   const svg = document.createElementNS(svgNS, "svg");
@@ -107,6 +117,76 @@ export function renderLeaderboardChart(
   // Clear container and append SVG
   container.innerHTML = "";
   container.appendChild(svg);
+
+  // --- Scale Mode Setup ---
+  const scaleMode = options?.scaleMode ?? 'linear';
+  const logMaxXP = Math.log10(Math.max(1, maxXP)); // Use log10(1)=0 for maxXP <= 1
+  // Ensure chartWidth is non-negative
+  const chartWidth = Math.max(0, width - leftMargin - rightMargin);
+
+  // --- Draw Vertical Grid Lines & X-Axis Ticks (Aligned) ---
+  const numSegments = 4; // Always use 4 segments for 5 lines/ticks
+  for (let i = 0; i <= numSegments; i++) {
+      // 1. Calculate the LINEAR value this tick represents (0%, 25%, ..., 100% of maxXP)
+      const linearTickValue = (i / numSegments) * maxXP;
+
+      // 2. Calculate the POSITION 'x' based on the CURRENT scale mode
+      let x = leftMargin; // Default to left margin
+      if (scaleMode === 'log' && maxXP > 1) { // Log scale only makes sense if maxXP > 1
+          // Map the linear value [0, maxXP] to the log range [log10(1), log10(maxXP)]
+          // Add 1 before taking log to handle linearTickValue=0 correctly (log10(1)=0)
+          // Use maxXP directly for the max log value since we established maxXP > 1
+          const logValue = Math.log10(linearTickValue + 1);
+          const logMaxValue = Math.log10(maxXP + 1); // Use maxXP+1 for the range end
+
+          if (logMaxValue > 0) { // Avoid division by zero if maxXP was exactly 1 (though filtered above)
+              x = leftMargin + (logValue / logMaxValue) * chartWidth;
+          } else {
+              // Fallback for edge case maxXP=1, treat as linear
+              x = leftMargin + (i / numSegments) * chartWidth;
+          }
+      } else { // Default to linear scale
+          x = leftMargin + (i / numSegments) * chartWidth;
+      }
+      // Ensure x is a valid number, default to leftMargin if not
+      x = Number.isFinite(x) ? x : leftMargin;
+
+
+      // 3. Draw Vertical Grid Line at the calculated position 'x'
+      const gridLine = document.createElementNS(svgNS, "line");
+      gridLine.setAttribute("x1", x.toString());
+      gridLine.setAttribute("x2", x.toString());
+      gridLine.setAttribute("y1", topMargin.toString()); // Span from top margin
+      gridLine.setAttribute("y2", (height - bottomMargin).toString()); // To bottom margin
+      gridLine.setAttribute("stroke", GREY_DARK); // Use same color as timeline grid
+      gridLine.setAttribute("stroke-width", "1");
+      svg.appendChild(gridLine);
+
+      // 4. Draw X-Axis Tick Mark at the calculated position 'x'
+      const tickMark = document.createElementNS(svgNS, "line");
+      tickMark.setAttribute("x1", x.toString());
+      tickMark.setAttribute("x2", x.toString());
+      tickMark.setAttribute("y1", (height - bottomMargin).toString());
+      tickMark.setAttribute("y2", (height - bottomMargin + 6).toString()); // Tick length
+      tickMark.setAttribute("stroke", GREY_LIGHT);
+      tickMark.setAttribute("stroke-width", "1");
+      svg.appendChild(tickMark);
+
+      // 5. Draw X-Axis Tick Label (showing the LINEAR value) at position 'x'
+      const tickLabel = document.createElementNS(svgNS, "text");
+      tickLabel.setAttribute("x", x.toString());
+      tickLabel.setAttribute("y", (height - bottomMargin + 20).toString()); // Position below tick
+      tickLabel.setAttribute("text-anchor", "middle");
+      tickLabel.setAttribute("font-size", "10");
+      tickLabel.setAttribute("fill", GREY_LIGHT);
+      // Format the LINEAR tick value
+      if (linearTickValue >= 1000) {
+          tickLabel.textContent = Math.round(linearTickValue / 1000).toString() + 'k';
+      } else {
+          tickLabel.textContent = Math.round(linearTickValue).toString();
+      }
+      svg.appendChild(tickLabel);
+  }
 
   // Create tooltip div
   const tooltip = document.createElement("div");
@@ -130,7 +210,7 @@ export function renderLeaderboardChart(
 
   // --- Draw bars ---
   data.forEach((entry, idx) => {
-    let x = leftMargin;
+    let currentX = leftMargin; // Use currentX to track position within the bar
     const y = topMargin + idx * (barHeight + barGap);
 
     // Highlight logic
@@ -146,17 +226,58 @@ export function renderLeaderboardChart(
     contributorIssues.forEach((issueKey, position) => {
       const issueXP = entry.issueBreakdown[issueKey] ?? 0;
       if (issueXP > 0) {
-        const barW = (issueXP / maxXP) * (width - leftMargin - rightMargin);
+        let barW = 0;
+        if (scaleMode === 'log') {
+            // Calculate width based on log scale
+            // Map XP to log10(max(1, xp)) to handle 0 and values < 1 correctly
+            const logXP = Math.log10(Math.max(1, issueXP));
+            // The width represents the contribution of this segment on the log scale
+            // This is tricky for stacked bars. A direct log width isn't right.
+            // We need to calculate the start and end points on the log scale.
+            // Let's rethink: Apply log scale to the *total* bar width and ticks,
+            // but keep segment widths proportional *within* the bar's scaled total width.
+
+            // Calculate total bar width based on scale mode first
+            const logTotalXP = Math.log10(Math.max(1, entry.totalXP));
+            const barTotalWidth = scaleMode === 'log' && logMaxXP > 0
+                ? (logTotalXP / logMaxXP) * chartWidth
+                : (entry.totalXP / maxXP) * chartWidth;
+
+            // Segment width is proportional to its XP contribution to the total XP
+            // Segment width is proportional to its XP contribution to the total XP
+            // Ensure totalXP is not zero to avoid NaN
+            barW = entry.totalXP > 0 ? (issueXP / entry.totalXP) * barTotalWidth : 0;
+
+        } else {
+            // Linear scale width calculation (use currentMaxXP for bar segment width relative to current view max)
+            barW = (issueXP / currentMaxXP) * chartWidth;
+        }
+
         const rect = document.createElementNS(svgNS, "rect");
-        rect.setAttribute("x", x.toString());
+        rect.setAttribute("x", currentX.toString()); // Use currentX
         rect.setAttribute("y", y.toString());
         rect.setAttribute("width", barW.toString());
         rect.setAttribute("height", barHeight.toString());
 
-        // Calculate opacity based on position
-        // Later positions (right side) get higher opacity
-        const segmentOpacity = baseOpacity * (position + 1);
-        const finalOpacity = isError ? 0.85 : (isHighlight ? Math.min(1, segmentOpacity * 1.3) : segmentOpacity);
+        // Calculate original opacity factor based on position (0 to 1)
+        // segmentOpacity ranges from baseOpacity to 1.0
+        const segmentOpacityFactor = (baseOpacity * (position + 1)); // Ranges roughly from (1/totalIssues) to 1.0
+
+        // Remap to target range [0.125, 0.875]
+        const minTargetOpacity = 0.125; // New min
+        const maxTargetOpacity = 0.875; // New max
+        const targetRange = maxTargetOpacity - minTargetOpacity; // New range (0.75)
+
+        // Apply remapping
+        let mappedOpacity = minTargetOpacity + segmentOpacityFactor * targetRange;
+
+        // Clamp to ensure it stays within [0.25, 0.75]
+        mappedOpacity = Math.max(minTargetOpacity, Math.min(maxTargetOpacity, mappedOpacity));
+
+        // Apply error state (use max target opacity) or highlight boost (cap at max)
+        const finalOpacity = isError
+            ? maxTargetOpacity
+            : (isHighlight ? Math.min(maxTargetOpacity, mappedOpacity * 1.3) : mappedOpacity); // Allow highlight boost but cap
 
         // Use single color with calculated opacity
         rect.setAttribute("fill", isError ? BAD : GOOD);
@@ -201,10 +322,20 @@ export function renderLeaderboardChart(
 
         rect.addEventListener("mouseleave", (e) => {
           const target = e.target as SVGRectElement;
-          const baseOpacity = parseFloat(target.getAttribute("data-base-opacity") || "1");
+          const baseOpacityFactor = parseFloat(target.getAttribute("data-base-opacity") || "0"); // Should be baseOpacity = 1/totalIssues
           const position = contributorIssues.indexOf(target.getAttribute("data-issue") || "");
-          const restoreOpacity = baseOpacity * (position + 1);
-          target.setAttribute("opacity", isHighlight ? Math.min(1, restoreOpacity * 1.3).toString() : restoreOpacity.toString());
+          // Recalculate the original factor and remap it for restore
+          const originalSegmentFactor = baseOpacityFactor * (position + 1);
+          // Use the updated min/max for remapping
+          const minRestoreOpacity = 0.125;
+          const maxRestoreOpacity = 0.875;
+          const restoreRange = maxRestoreOpacity - minRestoreOpacity;
+          let restoreOpacity = minRestoreOpacity + originalSegmentFactor * restoreRange;
+          restoreOpacity = Math.max(minRestoreOpacity, Math.min(maxRestoreOpacity, restoreOpacity));
+          // Apply highlight boost if needed, capped at max
+          restoreOpacity = isHighlight ? Math.min(maxRestoreOpacity, restoreOpacity * 1.3) : restoreOpacity;
+
+          target.setAttribute("opacity", restoreOpacity.toString());
           tooltip.style.display = "none";
         });
 
@@ -216,9 +347,17 @@ export function renderLeaderboardChart(
         });
 
         svg.appendChild(rect);
-        x += barW;
+        currentX += barW; // Increment currentX
       }
     });
+
+    // Calculate the final bar end position based on scale mode for label placement
+    // Calculate the final bar end position based on scale mode for label placement (use currentMaxXP for positioning relative to current view max)
+    const logTotalXP = Math.log10(Math.max(1, entry.totalXP));
+    const logCurrentMaxXP = Math.log10(Math.max(1, currentMaxXP)); // Log of current max for positioning
+    const finalBarEndX = scaleMode === 'log' && logCurrentMaxXP > 0
+        ? leftMargin + (logTotalXP / logCurrentMaxXP) * chartWidth
+        : leftMargin + (entry.totalXP / currentMaxXP) * chartWidth; // Use currentMaxXP here
 
     // Contributor label (left, dynamically clamp to avoid overflow)
     const label = document.createElementNS(svgNS, "text");
@@ -226,7 +365,10 @@ export function renderLeaderboardChart(
     label.setAttribute("fill", isError ? BAD : isHighlight ? GOOD : GREY);
     label.setAttribute("font-weight", isHighlight ? "bold" : "normal");
     label.setAttribute("text-anchor", "end");
-    label.textContent = entry.contributor;
+    // Add rank prefix to the displayed label
+    const rank = ranks[entry.contributor];
+    const rankPrefix = rank ? `#${rank} ` : "";
+    label.textContent = `${rankPrefix}${entry.contributor}`;
     // Temporarily position off-screen to measure
     label.setAttribute("x", "0");
     label.setAttribute("y", "-9999");
@@ -249,39 +391,57 @@ export function renderLeaderboardChart(
     // Temporarily position off-screen to measure
     xpLabel.setAttribute("x", "0");
     xpLabel.setAttribute("y", "-9999");
-    svg.appendChild(xpLabel);
-    // Measure text width
+    svg.appendChild(xpLabel); // Append temporarily to measure
+
+    // --- Conditional XP Label Placement (using finalBarEndX) ---
     const xpLabelWidth = xpLabel.getBBox().width;
-    // Clamp so label fits within right edge
-    const unclampedXpLabelX = x + 8;
-    const maxXpLabelX = width - rightMargin - xpLabelWidth;
-    const xpLabelX = Math.min(unclampedXpLabelX, maxXpLabelX);
-    xpLabel.setAttribute("x", xpLabelX.toString());
+    // Compare label width to the *rendered* bar width (finalBarEndX - leftMargin)
+    const renderedBarWidth = finalBarEndX - leftMargin;
+    const labelPadding = 8; // Padding inside/outside the bar
+
+    // Ensure renderedBarWidth is a positive number before comparison
+    if (renderedBarWidth > 0 && xpLabelWidth + labelPadding < renderedBarWidth) {
+        // Fits inside: Render black text, right-aligned inside the bar
+        xpLabel.setAttribute("fill", "#000"); // Black text
+        xpLabel.setAttribute("text-anchor", "end");
+        const labelX = finalBarEndX - labelPadding; // Position relative to the calculated end
+        xpLabel.setAttribute("x", labelX.toString());
+    } else {
+        // Doesn't fit inside: Render standard color, left-aligned outside the bar
+        xpLabel.setAttribute("fill", isError ? BAD : isHighlight ? GOOD : GREY_LIGHT); // Original color logic
+        xpLabel.setAttribute("text-anchor", "start");
+        // Clamp position to the right edge
+        const unclampedXpLabelX = finalBarEndX + labelPadding; // Position relative to the calculated end
+        const maxXpLabelX = width - rightMargin - xpLabelWidth; // Ensure it doesn't overflow chart
+        const labelX = Math.min(unclampedXpLabelX, maxXpLabelX);
+        xpLabel.setAttribute("x", labelX.toString());
+    }
+    // Set vertical position (same for both cases)
     xpLabel.setAttribute("y", (y + barHeight / 2 + 6).toString());
 
   });
 
-  // Y-axis title
-  const yTitle = document.createElementNS(svgNS, "text");
-  yTitle.setAttribute("x", (leftMargin - 8).toString());
-  yTitle.setAttribute("y", (topMargin - 16).toString());
-  yTitle.setAttribute("text-anchor", "end");
-  yTitle.setAttribute("font-size", "14");
-  yTitle.setAttribute("fill", GREY_LIGHT);
-  yTitle.textContent = "Contributor";
-  svg.appendChild(yTitle);
+  // --- Removed Y-axis title ---
+  // const yTitle = document.createElementNS(svgNS, "text");
+  // yTitle.setAttribute("x", (leftMargin - 8).toString());
+  // yTitle.setAttribute("y", (topMargin - 16).toString());
+  // yTitle.setAttribute("text-anchor", "end");
+  // yTitle.setAttribute("font-size", "14");
+  // yTitle.setAttribute("fill", GREY_LIGHT);
+  // yTitle.textContent = "Contributor";
+  // svg.appendChild(yTitle);
 
-  // X-axis title
-  const xTitle = document.createElementNS(svgNS, "text");
-  xTitle.setAttribute("x", (width - rightMargin).toString());
-  xTitle.setAttribute("y", (height - bottomMargin + 24).toString());
-  xTitle.setAttribute("text-anchor", "end");
-  xTitle.setAttribute("font-size", "14");
-  xTitle.setAttribute("fill", GREY_LIGHT);
-  xTitle.textContent = "XP";
-  svg.appendChild(xTitle);
+  // --- Removed X-axis title ---
+  // const xTitle = document.createElementNS(svgNS, "text");
+  // ... (rest of title code) ...
+  // svg.appendChild(xTitle);
 
-  // Legend (repo patterns)
+  // --- X-Axis Ticks and Grid Lines are now drawn together above ---
+
+
+  // --- Removed Legend ---
+  /*
+  // Legend (repo patterns) - This should be *after* the tick drawing logic block
   // Responsive legend layout
   // Create a simplified legend container
   const legendContainer = document.createElement("div");
@@ -328,4 +488,5 @@ export function renderLeaderboardChart(
     `;
     legendContainer.appendChild(errorItem);
   }
-}
+  */
+} // End of renderLeaderboardChart function

@@ -31,12 +31,11 @@ jobs:
           GITHUB_REPO: ${{ secrets.GITHUB_REPO }}
         run: bun run tools/build.ts
 
-      - name: Copy static assets to dist
+      - name: Copy src contents to dist
         run: |
           mkdir -p dist
-          cp src/index.html dist/
-          cp src/style.css dist/
-          # Add more static assets here if needed
+          cp -r src/* dist/
+          # This copies all contents from src (including TS files) into dist
 
       - name: List dist directory contents
         run: |

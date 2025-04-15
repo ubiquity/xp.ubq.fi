@@ -5,24 +5,33 @@
   <title>XP | UbiquityOS</title>
   <link rel="stylesheet" href="css/style.css" />
   <link rel="stylesheet" href="css/charts.css" />
-  <link rel="stylesheet" href="css/dev-mode-widget.css" />
+  <link rel="stylesheet" href="css/recent-runs-widget.css" /> <!-- Updated CSS link -->
 </head>
 <body>
   <div id="xp-analytics-root" class="xp-analytics-root">
     <div id="xp-analytics-header" class="xp-analytics-header">
       <div class="xp-analytics-header-row">
+        <img id="xp-analytics-org-avatar" class="xp-analytics-org-avatar" alt="Org Avatar" style="display: none;"> <!-- Added Org Avatar -->
+        <span id="xp-analytics-context-label" class="xp-analytics-context-label"></span>
+        <div class="xp-analytics-flex-spacer"></div> <!-- Spacer to push controls right -->
         <label for="contributor-select" class="xp-analytics-label">Contributor</label>
         <select id="contributor-select" class="xp-analytics-select"></select>
         <button id="view-toggle" class="xp-analytics-view-toggle">Leaderboard</button>
-        <div class="xp-analytics-flex-spacer"></div>
-        <label for="time-range" class="xp-analytics-time-range-label">Time Range</label>
-        <input id="time-range" type="range" min="0" max="100" value="100" class="xp-analytics-time-range-input">
-        <span id="time-range-label" class="xp-analytics-time-range-label"></span>
+        <button id="scale-toggle" class="xp-analytics-view-toggle">Use Log Scale</button> <!-- Added Scale Toggle -->
+        <!-- <div class="xp-analytics-flex-spacer"></div> --> <!-- Removed duplicate spacer -->
+        <!-- Slider moved below -->
       </div>
     </div>
-    <div id="xp-analytics-chart-area" class="xp-analytics-chart-area"></div>
+    <div id="xp-analytics-slider-container" class="xp-analytics-slider-container">
+      <input id="time-range" type="range" min="0" max="100" value="100" class="xp-analytics-time-range-input">
+      <span id="time-range-label" class="xp-analytics-time-range-label"></span>
+    </div>
+    <div id="main-content" class="main-content"> <!-- New container -->
+      <div id="xp-analytics-chart-area" class="xp-analytics-chart-area"></div>
+      <recent-runs-widget></recent-runs-widget> <!-- Updated tag name -->
+    </div>
   </div>
-  <dev-mode-widget></dev-mode-widget>
+  <!-- Widget moved inside #main-content -->
   <script src="/bundle.js" type="module"></script>
 </body>
 </html>

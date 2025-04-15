@@ -10,7 +10,8 @@ import { normalizeOrgRepoData } from "../normalize-org-repo-data";
 type WorkerCallbacks = {
   onProgress: (phase: string, percent: number, detail: string) => void;
   onError: (error: Error) => void;
-  onComplete: (data: { leaderboard: LeaderboardEntry[], timeSeries: TimeSeriesEntry[] }) => void;
+  // Add rawData to the completion payload
+  onComplete: (data: { leaderboard: LeaderboardEntry[], timeSeries: TimeSeriesEntry[], rawData?: OrgRepoData }) => void;
 };
 
 const DEFAULT_CALLBACKS: WorkerCallbacks = {
@@ -72,20 +73,22 @@ export async function loadArtifactData(
       orgData = normalizeOrgRepoData({ [runId]: orgData }, runId)[runId];
       callbacks.onComplete({
         leaderboard: getLeaderboardData({ [runId]: orgData }),
-        timeSeries: getTimeSeriesData({ [runId]: orgData })
+        timeSeries: getTimeSeriesData({ [runId]: orgData }),
+        rawData: cachedData // Pass raw data on cache hit too
       });
+      console.log("Cache hit! Using data from IndexedDB.");
+      return; // <<<--- Return here if cache hit
     } else {
-      callbacks.onComplete({
-        leaderboard: [],
-        timeSeries: []
-      });
+      console.log("Cache miss. Proceeding with worker fetch.");
+      // Optionally, you could call onProgress here to indicate fetching starts
+      // callbacks.onProgress("Fetching", 0, "Starting download...");
     }
   } catch (error) {
     callbacks.onError(error instanceof Error ? error : new Error(String(error)));
-    return;
+    return; // Return on error during cache check
   }
 
-  // Always start worker-based processing to get fresh data
+  // Only start worker if cache miss
   console.log("Starting worker-based processing...");
   const worker = getWorker();
   console.log("Worker initialized");
@@ -118,7 +121,8 @@ export async function loadArtifactData(
 
         callbacks.onComplete({
           leaderboard: getLeaderboardData({ [runId]: orgData }),
-          timeSeries: getTimeSeriesData({ [runId]: orgData })
+          timeSeries: getTimeSeriesData({ [runId]: orgData }),
+          rawData: msg.data // Pass the raw data as well
         });
         break;
 

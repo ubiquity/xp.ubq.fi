@@ -7,10 +7,27 @@
  */
 
 import type { TimeSeriesEntry } from "../data-transform";
+import { drawYAxisTicks } from "./chart-helpers/draw-y-axis-ticks";
+import { drawXAxisTicks } from "./chart-helpers/draw-x-axis-ticks";
+import { processChartData, type ProcessedContributorData } from "./chart-helpers/process-chart-data";
+// import { drawLegend } from "./chart-helpers/draw-legend"; // Removed import
+import { drawContributorLine } from "./chart-helpers/draw-contributor-line";
+
+// Define the structure for points mapped to SVG coordinates
+// (CumulativePoint is now defined within process-chart-data.ts)
+
+// Define the structure for points mapped to SVG coordinates
+type SvgPoint = {
+    x: number;
+    y: number;
+    time: number;
+    xp: number;
+};
+
 
 /**
  * Renders a multi-line time series chart into the given container.
- * @param data TimeSeriesEntry[]
+ * @param data TimeSeriesEntry[] - Expects data filtered by contributor, but NOT by time cutoff.
  * @param container HTMLElement
  * @param options Optional config
  */
@@ -27,6 +44,13 @@ export function renderTimeSeriesChart(
     highlightContributor?: string; // Optionally highlight a contributor
     errorContributors?: string[]; // Optionally mark contributors as "bad"
     showLegend?: boolean;
+    maxYValue?: number; // Maximum Y value to use for scaling
+    ranks?: { [contributor: string]: number }; // Map of contributor ranks for opacity
+    minTime?: number | null; // Optional fixed minimum time for X-axis
+    maxTime?: number | null; // Optional fixed maximum time for X-axis
+    animationProgress?: number; // Optional animation progress (0-1) for fade-in effect
+    cutoffTimeMs?: number; // Optional cutoff time for filtering/interpolation
+    scaleMode?: 'linear' | 'log'; // Add scale mode option
   }
 ) {
   // Get CSS variables
@@ -39,91 +63,113 @@ export function renderTimeSeriesChart(
   const BG = computedStyle.getPropertyValue('--chart-color-bg').trim();
 
   // --- Config ---
-  // SVG namespace
   const svgNS = "http://www.w3.org/2000/svg";
-
-  // Responsive width: use container's width or fallback to 600
   const width = options?.width ?? (container.clientWidth || container.getBoundingClientRect().width || 600);
-  const height = options?.height ?? 320;
+  const height = options?.height ?? (container.clientHeight || container.getBoundingClientRect().height || 320);
+  const startRadius = 48;
+  const endRadius = 2;
 
   // Calculate dynamic margins based on label widths
   const tempSvg = document.createElementNS(svgNS, "svg");
   tempSvg.style.visibility = "hidden";
   document.body.appendChild(tempSvg);
 
-  // Measure contributor label widths
-  let maxContributorWidth = 0;
-  data.forEach(entry => {
-    const label = document.createElementNS(svgNS, "text");
-    label.setAttribute("font-size", "14");
-    label.textContent = entry.contributor;
-    tempSvg.appendChild(label);
-    const labelWidth = label.getBBox().width;
-    maxContributorWidth = Math.max(maxContributorWidth, labelWidth);
-  });
+  // --- Axis Scaling (Calculate maxXP first, needed for margin calc) ---
+  const minTime = options?.minTime ?? Math.min(Date.now(), ...data.flatMap(entry => entry.series.map(pt => new Date(pt.time).getTime())));
+  const maxTime = options?.maxTime ?? Math.max(Date.now(), ...data.flatMap(entry => entry.series.map(pt => new Date(pt.time).getTime())));
 
+  // Calculate actual max cumulative XP from data first
+  let calculatedMaxXP = 0;
+  if (!options?.maxYValue) {
+      data.forEach(entry => {
+          let cumulative = 0;
+          entry.series.forEach(pt => {
+              cumulative += pt.xp;
+              if (cumulative > calculatedMaxXP) calculatedMaxXP = cumulative;
+          });
+      });
+  }
+  // Use provided maxYValue if available, otherwise use calculated max, ensuring it's at least 1 for scaling purposes.
+  const maxXP = options?.maxYValue ?? Math.max(1, calculatedMaxXP);
+
+
+  // --- Dynamic Margin Calculation ---
+  // Measure widest contributor label (including potential rank prefix)
+  let maxContributorLabelWidth = 0;
+  // Find the contributor with the longest name to estimate max width
+  // This is an approximation, assumes rank prefix doesn't drastically change the longest name
+  const longestContributor = data.reduce((longest, current) =>
+      current.contributor.length > longest.length ? current.contributor : longest, ""
+  );
+  // Assume max rank could be 3 digits for width calculation (#100 )
+  const potentialLabelText = `#999 ${longestContributor}`;
+  const contributorLabel = document.createElementNS(svgNS, "text");
+  contributorLabel.setAttribute("font-size", "14"); // Match label font size
+  contributorLabel.textContent = potentialLabelText;
+  tempSvg.appendChild(contributorLabel);
+  maxContributorLabelWidth = contributorLabel.getBBox().width;
+
+  // Measure widest Y-axis label (using the already calculated maxXP)
+  let maxYAxisLabelWidth = 0;
+  const maxYLabelText = maxXP >= 1000 ? `${Math.ceil(maxXP / 1000)}k` : Math.ceil(maxXP).toString(); // Format the max value as it would appear
+  const yLabel = document.createElementNS(svgNS, "text");
+  yLabel.setAttribute("font-size", "10"); // Match font size used in drawYAxisTicks
+  yLabel.textContent = maxYLabelText;
+  tempSvg.appendChild(yLabel);
+  maxYAxisLabelWidth = yLabel.getBBox().width;
+
+  // Clean up temp SVG
   document.body.removeChild(tempSvg);
 
-  // Set margins with padding
-  const leftMargin = options?.leftMargin ?? 64;
-  const rightMargin = options?.rightMargin ?? Math.max(32, maxContributorWidth + 32); // base padding of 32px
+  // Calculate dynamic margins (using correctly scoped variables)
+  const yAxisPadding = 16; // Space for tick mark (4px) + label padding (8px) + buffer (4px)
+  const requiredLeftMargin = maxYAxisLabelWidth + yAxisPadding;
+  const leftMargin = Math.max(options?.leftMargin ?? 0, 64, requiredLeftMargin); // Ensure minimum 64px or calculated space
+  const rightMargin = options?.rightMargin ?? Math.max(32, maxContributorLabelWidth + 16); // Use measured width + padding
   const topMargin = options?.topMargin ?? 32;
   const bottomMargin = options?.bottomMargin ?? 48;
   const highlightContributor = options?.highlightContributor ?? data[0]?.contributor;
   const errorContributors = options?.errorContributors ?? [];
   const showLegend = options?.showLegend ?? true;
+  const scaleMode = options?.scaleMode ?? 'linear'; // Get scale mode
 
-  // --- Data flattening and axis scaling (no global alignment) ---
-  // Gather all points and determine global min/max for axis scaling
-  const allPoints = data.flatMap(entry => entry.series);
-  const allTimesPOSIX = allPoints.map(pt => new Date(pt.time).getTime());
-  const minTime = Math.min(...allTimesPOSIX);
-  const maxTime = Math.max(...allTimesPOSIX);
-
-  // For each contributor, build a cumulative XP array at their own event times only
-  const contributorData = data.map(entry => {
-    // Sort events by time
-    const sortedSeries = [...entry.series].sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
-    let cumulative = 0;
-    const points = sortedSeries.map(pt => {
-      cumulative += pt.xp;
-      return {
-        time: new Date(pt.time).getTime(),
-        xp: cumulative
-      };
-    });
-    return {
-      contributor: entry.contributor,
-      userId: entry.userId,
-      points
-    };
+  // --- Data Processing using Helper ---
+  const finalContributorData: ProcessedContributorData[] = processChartData({
+      data,
+      cutoffTimeMs: options?.cutoffTimeMs
   });
 
-  // Find max XP (cumulative, across all contributors and all times)
-  let maxXP = 1;
-  contributorData.forEach(entry => {
-    entry.points.forEach(pt => {
-      if (pt.xp > maxXP) maxXP = pt.xp;
-    });
-  });
-
-  // SVG root
+  // --- SVG Setup ---
   const svg = document.createElementNS(svgNS, "svg");
   svg.setAttribute("width", "100%");
   svg.setAttribute("height", height.toString());
   svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
   svg.style.display = "block";
   svg.style.background = BG;
-
-  // Clear container and append SVG
   container.innerHTML = "";
   container.appendChild(svg);
 
-  // --- Draw grid lines (greyscale) ---
+  // --- Draw grid lines (conditional) ---
+  const chartHeight = height - topMargin - bottomMargin;
+  const logMaxXP = Math.log10(Math.max(1, maxXP)); // Needed for log grid lines
+
   for (let i = 0; i <= 4; i++) {
-    const y = topMargin + ((height - topMargin - bottomMargin) * i) / 4;
-    const line = document.createElementNS(svgNS, "line");
-    line.setAttribute("x1", leftMargin.toString());
+      // Calculate the linear value this grid line represents (0 to maxXP)
+      const linearValue = (i / 4) * maxXP;
+      let y = topMargin; // Default to top
+
+      if (scaleMode === 'log' && maxXP > 1) {
+          const logValue = Math.log10(Math.max(1, linearValue));
+          // Position based on log scale (inverted: 0 is bottom, logMaxXP is top)
+          y = topMargin + chartHeight * (1 - (logMaxXP > 0 ? logValue / logMaxXP : 0));
+      } else {
+          // Linear position
+          y = topMargin + chartHeight * (1 - (i / 4)); // Inverted: 0 is bottom, 1 (i=4) is top
+      }
+      y = Number.isFinite(y) ? y : topMargin + chartHeight; // Fallback to bottom
+
+      const line = document.createElementNS(svgNS, "line");
+      line.setAttribute("x1", leftMargin.toString());
     line.setAttribute("x2", (width - rightMargin).toString());
     line.setAttribute("y1", y.toString());
     line.setAttribute("y2", y.toString());
@@ -132,87 +178,77 @@ export function renderTimeSeriesChart(
     svg.appendChild(line);
   }
 
-  // --- Draw lines for each contributor (using their own event times) ---
-  contributorData.forEach((entry, idx) => {
+  // --- Draw Axis Lines ---
+  const axisLine = document.createElementNS(svgNS, "line");
+  axisLine.setAttribute("x1", leftMargin.toString());
+  axisLine.setAttribute("x2", leftMargin.toString());
+  axisLine.setAttribute("y1", topMargin.toString());
+  axisLine.setAttribute("y2", (height - bottomMargin).toString());
+  axisLine.setAttribute("stroke", GREY);
+  axisLine.setAttribute("stroke-width", "1");
+  svg.appendChild(axisLine);
+
+  const axisLineX = document.createElementNS(svgNS, "line");
+  axisLineX.setAttribute("x1", leftMargin.toString());
+  axisLineX.setAttribute("x2", (width - rightMargin).toString());
+  axisLineX.setAttribute("y1", (height - bottomMargin).toString());
+  axisLineX.setAttribute("y2", (height - bottomMargin).toString());
+  axisLineX.setAttribute("stroke", GREY);
+  axisLineX.setAttribute("stroke-width", "1");
+  svg.appendChild(axisLineX);
+
+  // --- Draw Axis Ticks using Helpers ---
+  // Pass scaleMode to Y-axis ticks helper
+  drawYAxisTicks({ svg, svgNS, maxXP, height, topMargin, bottomMargin, leftMargin, GREY, GREY_LIGHT, scaleMode });
+  if (minTime !== null && maxTime !== null) {
+      // X-axis (time) remains linear regardless of Y-axis scale
+      drawXAxisTicks({ svg, svgNS, minTime, maxTime, width, height, leftMargin, rightMargin, bottomMargin, GREY, GREY_LIGHT });
+  }
+
+  // --- Sort for Rendering Order ---
+  const sortedContributorData = [...finalContributorData].sort((a, b) => {
+    const aIsHighlight = a.contributor === highlightContributor;
+    const bIsHighlight = b.contributor === highlightContributor;
+    if (aIsHighlight && !bIsHighlight) return 1;
+    if (!aIsHighlight && bIsHighlight) return -1;
+    return 0;
+  });
+
+  // --- Draw Contributor Lines using Helper ---
+  sortedContributorData.forEach((entry) => {
     const isHighlight = entry.contributor === highlightContributor;
     const isError = errorContributors.includes(entry.contributor);
 
-    // Map contributor's own points to SVG coordinates
-    const points = entry.points.map((pt, i) => {
-      const x =
-        leftMargin +
-        ((pt.time - minTime) / (maxTime - minTime || 1)) *
-          (width - leftMargin - rightMargin);
-      const y =
-        topMargin +
-        (1 - pt.xp / maxXP) * (height - topMargin - bottomMargin);
-      return { x, y, xp: pt.xp, time: pt.time };
-    });
-
-    // Draw line
-    if (points.length > 1) {
-      const path = document.createElementNS(svgNS, "path");
-      let d = `M ${points[0].x} ${points[0].y}`;
-      for (let i = 1; i < points.length; i++) {
-        d += ` L ${points[i].x} ${points[i].y}`;
-      }
-      path.setAttribute("d", d);
-      path.setAttribute(
-        "stroke",
-        isError ? BAD : isHighlight ? GOOD : `rgba(136,136,136,0.5)`
-      );
-      path.setAttribute("stroke-width", isHighlight ? "3" : "2");
-      path.setAttribute("fill", "none");
-      path.setAttribute("opacity", isError ? "0.85" : isHighlight ? "1" : "0.7");
-      svg.appendChild(path);
-    }
-
-    // Draw points
-    points.forEach((pt, i) => {
-      const circle = document.createElementNS(svgNS, "circle");
-      circle.setAttribute("cx", pt.x.toString());
-      circle.setAttribute("cy", pt.y.toString());
-      circle.setAttribute("r", isHighlight ? "2" : "1");
-      circle.setAttribute(
-        "fill",
-        isError ? BAD : isHighlight ? GOOD : GREY_LIGHT
-      );
-      circle.setAttribute("opacity", isError ? "0.85" : isHighlight ? "1" : "0.7");
-      svg.appendChild(circle);
-    });
-
-    // Contributor label (right side, dynamically clamp and avoid collision with line/point)
-    if (points.length > 0) {
-      const label = document.createElementNS(svgNS, "text");
-      label.setAttribute("font-size", "14");
-      label.setAttribute("fill", isError ? BAD : isHighlight ? GOOD : GREY);
-      label.setAttribute("font-weight", isHighlight ? "bold" : "normal");
-      label.setAttribute("text-anchor", "start");
-      label.textContent = entry.contributor;
-      // Temporarily position off-screen to measure
-      label.setAttribute("x", "0");
-      label.setAttribute("y", "-9999");
-      svg.appendChild(label);
-      // Measure text width
-      const textWidth = label.getBBox().width;
-      // Calculate unclamped x
-      const lastPointX = points[points.length - 1].x;
-      const unclampedX = lastPointX + 8;
-      // Clamp so label fits within (width - rightMargin)
-      const maxX = width - rightMargin - textWidth;
-      let labelX = Math.min(unclampedX, maxX);
-      // Ensure label does not overlap the last point/line
-      const minLabelX = lastPointX + 12; // 12px buffer from last point
-      if (labelX < minLabelX) {
-        labelX = minLabelX;
-      }
-      label.setAttribute("x", labelX.toString());
-      label.setAttribute("y", (points[points.length - 1].y + 4).toString());
+    // Ensure minTime and maxTime are numbers before calling helper
+    if (minTime !== null && maxTime !== null) {
+        drawContributorLine({
+            svg,
+            svgNS,
+            entry,
+            isHighlight,
+            isError,
+            minTime,
+            maxTime,
+            maxXP,
+            width,
+            height,
+            leftMargin,
+            rightMargin,
+            topMargin,
+            bottomMargin,
+            GOOD,
+            BAD,
+            ranks: options?.ranks,
+            animationProgress: options?.animationProgress,
+            cutoffTimeMs: options?.cutoffTimeMs,
+            startRadius,
+            endRadius,
+            scaleMode: scaleMode // Pass scaleMode
+        });
     }
   });
 
-  // --- Axis labels ---
-  // Y-axis
+  // --- Draw Axis Labels ---
   const yTitle = document.createElementNS(svgNS, "text");
   yTitle.setAttribute("x", (leftMargin - 12).toString());
   yTitle.setAttribute("y", (topMargin - 12).toString());
@@ -222,7 +258,6 @@ export function renderTimeSeriesChart(
   yTitle.textContent = "Cumulative XP";
   svg.appendChild(yTitle);
 
-  // X-axis
   const xTitle = document.createElementNS(svgNS, "text");
   xTitle.setAttribute("x", (width - rightMargin).toString());
   xTitle.setAttribute("y", (height - bottomMargin + 32).toString());
@@ -232,53 +267,19 @@ export function renderTimeSeriesChart(
   xTitle.textContent = "Time";
   svg.appendChild(xTitle);
 
-  // --- Legend ---
-  if (showLegend) {
-    let lx = leftMargin;
-    const ly = height - bottomMargin + 8;
-
-    // Highlight
-    if (highlightContributor) {
-      const legendLine = document.createElementNS(svgNS, "rect");
-      legendLine.setAttribute("x", lx.toString());
-      legendLine.setAttribute("y", ly.toString());
-      legendLine.setAttribute("width", "24");
-      legendLine.setAttribute("height", "4");
-      legendLine.setAttribute("fill", GOOD);
-      legendLine.setAttribute("opacity", "1");
-      svg.appendChild(legendLine);
-
-      const legendLabel = document.createElementNS(svgNS, "text");
-      legendLabel.setAttribute("x", (lx + 32).toString());
-      legendLabel.setAttribute("y", (ly + 12).toString());
-      legendLabel.setAttribute("font-size", "12");
-      legendLabel.setAttribute("fill", GOOD);
-      legendLabel.textContent = highlightContributor;
-      svg.appendChild(legendLabel);
-
-      lx += 120;
-    }
-
-    // Error
-    if (errorContributors.length > 0) {
-      const errorLine = document.createElementNS(svgNS, "rect");
-      errorLine.setAttribute("x", lx.toString());
-      errorLine.setAttribute("y", ly.toString());
-      errorLine.setAttribute("width", "24");
-      errorLine.setAttribute("height", "4");
-      errorLine.setAttribute("fill", BAD);
-      errorLine.setAttribute("opacity", "0.85");
-      svg.appendChild(errorLine);
-
-      const errorLabel = document.createElementNS(svgNS, "text");
-      errorLabel.setAttribute("x", (lx + 32).toString());
-      errorLabel.setAttribute("y", (ly + 12).toString());
-      errorLabel.setAttribute("font-size", "12");
-      errorLabel.setAttribute("fill", BAD);
-      errorLabel.textContent = "Error/Flagged";
-      svg.appendChild(errorLabel);
-
-      lx += 120;
-    }
-  }
+  // --- Removed Legend ---
+  /*
+  drawLegend({
+    svg,
+    svgNS,
+    showLegend,
+    highlightContributor,
+    errorContributors,
+    leftMargin,
+    height,
+    bottomMargin,
+    GOOD,
+    BAD,
+  });
+  */
 }
