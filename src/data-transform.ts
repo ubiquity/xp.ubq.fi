@@ -15,6 +15,29 @@
  * }
  */
 
+// Define the structure for the score object within comments
+export type CommentScoreDetails = {
+  reward: number;
+  formatting?: { // Make formatting optional as it might not always be present
+    content?: { [key: string]: { score: number; elementCount: number } };
+    result?: number;
+  };
+  priority?: number;
+  words?: {
+    wordCount: number;
+    wordValue: number;
+    result: number;
+  };
+  readability?: {
+    fleschKincaid: number;
+    syllables: number;
+    sentences: number;
+    score: number;
+  };
+  multiplier?: number;
+  relevance?: number;
+};
+
 export type ContributorAnalytics = {
   userId: number;
   total: number;
@@ -25,8 +48,11 @@ export type ContributorAnalytics = {
   } | null;
   comments: Array<{
     id: number;
+    content?: string; // Add optional content field
     timestamp: string; // Required ISO 8601 string
-    score: { reward: number };
+    score: CommentScoreDetails; // Use the detailed score type
+    url?: string; // Optional URL for the comment
+    commentType?: string; // Optional type of comment (e.g., ISSUE_AUTHOR)
   }>;
   evaluationCommentHtml: string | null;
 };
@@ -45,6 +71,10 @@ export type TimeSeriesDataPoint = {
   xp: number;
   repo: string;
   issueOrPr: string;
+  eventType: string; // e.g., 'task', 'comment', 'ISSUE_AUTHOR'
+  url?: string; // Optional URL for the event
+  scoreDetails?: CommentScoreDetails; // Optional detailed score info
+  contentPreview?: string; // Optional preview of comment content
 };
 
 export type TimeSeriesEntry = {
@@ -284,28 +314,46 @@ export function getTimeSeriesData(
               throw new Error(`Invalid task timestamp for contributor "${contributor}" in issue "${issueOrPr}"`);
             }
 
+            // TODO: Check if task object has a URL or identifier we can use
             entry.series.push({
               time: timestamp,
               xp: reward,
               repo,
               issueOrPr,
+              eventType: 'task', // Assign event type
+              // url: analytics.task.url // If available
+              // scoreDetails remains undefined for tasks
             });
           }
 
           // Handle comment events
           const comments = Array.isArray(analytics.comments) ? analytics.comments : [];
           for (const comment of comments) {
-            const { timestamp, score, id } = comment;
+            // Extract fields including content
+            const { timestamp, score, id, url, commentType, content } = comment;
 
             if (!timestamp || isNaN(new Date(timestamp).getTime())) {
               throw new Error(`Invalid comment timestamp for comment ${id} from contributor "${contributor}" in issue "${issueOrPr}"`);
             }
+
+            // Create content preview (truncate if necessary)
+            let contentPreview: string | undefined = undefined;
+            if (content && typeof content === 'string') {
+                const previewLength = 50; // Max length for preview
+                contentPreview = content.length > previewLength ? `${content.substring(0, previewLength)}...` : content;
+                contentPreview = contentPreview.replace(/\n/g, ' '); // Replace newlines for tooltip
+            }
+
 
             entry.series.push({
               time: timestamp,
               xp: score.reward,
               repo,
               issueOrPr,
+              eventType: commentType || 'comment', // Use commentType or default
+              url: url, // Add URL if available
+              scoreDetails: score, // Add the full score object
+              contentPreview: contentPreview // Add the content preview
             });
           }
         }
