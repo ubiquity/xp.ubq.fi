@@ -29,8 +29,9 @@ This document outlines the technical architecture of the application and how spe
 4.  JavaScript (`fflate`) unzips the downloaded data in the browser or a web worker.
 5.  The `aggregated_results.json` file content is extracted and parsed.
 6.  The `data-transform.ts` module converts the parsed array data into the nested `OrgRepoData` structure (this structure is also referred to as `rawData` in the context of insights).
-7.  The transformed data is stored in IndexedDB, keyed by `runId`.
+7.  The transformed data (`OrgRepoStructure`) is stringified, converted to a Blob, and stored in IndexedDB, keyed by `runId`.
 8.  Feedback is provided in the console/UI during the process.
+9.  When data is needed (e.g., for UI display), `src/workers/artifact-worker-manager.ts` retrieves the Blob from IndexedDB using the `runId`, parses the JSON back into the `OrgRepoStructure`, and then passes this structure to `getLeaderboardData` and `getTimeSeriesData`.
 
 ## 4. Core Design Patterns
 
@@ -39,44 +40,51 @@ This document outlines the technical architecture of the application and how spe
 *   **Script-Driven Build/Dev:** Bun scripts manage the build and development workflow.
 *   **Client-Side Processing:** Core data processing (unzipping, transformation) happens in the browser to minimize backend requirements and work around serverless compute limits.
 
-## 5. RawData Structure for Insights
+## 5. Data Structure for Insights (`OrgRepoStructure`)
 
-The transformed data (`rawData`) stored in IndexedDB and used for insights follows this hierarchical structure:
+The data structure stored in IndexedDB under the `runId` key, and subsequently used for generating insights and analytics, is the `OrgRepoStructure`:
 
+```typescript
+// Defined in src/data-transform.ts
+export type OrgRepoStructure = {
+    [repo: string]: { // Key is repo name (e.g., "ubiquity-os/repo-name")
+      [issue: string]: { // Key is issue number as string
+        [contributor: string]: { // Key is contributor username
+          userId: number;
+          total: number; // Total XP for this contributor on this issue/PR
+          task: { reward: number; multiplier: number; timestamp: string; } | null;
+          comments: Array<{ id: number; content?: string; timestamp: string; score: CommentScoreDetails; url?: string; commentType?: string; }>;
+          reviewRewards?: Array<{ reviews: Array<{ reviewId: number; effect: { addition: number; deletion: number }; reward: number; priority: number; }>; url?: string; }>;
+          evaluationCommentHtml: string | null;
+        };
+      };
+    };
+};
 ```
-UserID -> Repository -> Issue/PR Number -> Contributor Username -> {
-  userId,
-  total, // Total XP for this issue/PR
-  task: { reward, multiplier, timestamp }, // Task assignment details
-  comments: [ { id, content, url, timestamp, commentType, score: { reward, formatting, priority, words, readability, multiplier, relevance, diffHunk? } } ], // Array of comments
-  reviewRewards: [ { reviews: [ { reviewId, effect: { addition, deletion }, reward, priority } ], url } ], // Array of review actions
-  evaluationCommentHtml // Pre-generated summary HTML (may not be used for direct insight calculation)
-}
-```
 
-## 6. Insight Derivation Patterns (from RawData)
+## 6. Insight Derivation Patterns (from `OrgRepoStructure`)
 
-This section details how manager-focused insights are derived from the `rawData` structure.
+This section details how manager-focused insights are derived by processing the `OrgRepoStructure` retrieved for a specific `runId`. Note that some insights are directly available from the outputs of `getLeaderboardData` and `getTimeSeriesData` (which operate on the `OrgRepoStructure`), while others require further processing of the structure itself.
 
 ### 6.1. Individual Performance Insights
 
-*   **Overall Contribution Score (XP):** Sum `total` across relevant issues/PRs per `userId`.
-*   **Contribution Breakdown:** Aggregate counts of `commentType`, check `task.reward > 0`, and count `reviewRewards` per `userId`.
-*   **Comment Quality Metrics:** Average `score.formatting`, `score.readability`, `score.relevance` per `userId`.
-*   **Review Impact & Thoroughness:** Analyze `reviewRewards.reviews.effect`, `reviewRewards.reviews.reward`, and count `PULL_COLLABORATOR` comments with `diffHunk`.
-*   **Engagement & Timeliness:** Analyze distribution/frequency of `comments.timestamp` and `task.timestamp`.
+*   **Overall Contribution Score (XP):** Directly available as `totalXP` per contributor in the output of `getLeaderboardData(OrgRepoStructure)`.
+*   **Contribution Breakdown:** Requires iterating through the `OrgRepoStructure`. Count occurrences of different `commentType` values in `comments`, check `task.reward > 0`, and count `reviewRewards` entries per `userId`.
+*   **Comment Quality Metrics:** Requires iterating through `OrgRepoStructure`. Calculate average `score.formatting.result`, `score.readability.score`, and `score.relevance` from the `comments` array per `userId`.
+*   **Review Impact & Thoroughness:** Requires iterating through `OrgRepoStructure`. Analyze `reviewRewards.reviews.effect` (additions/deletions) and `reviewRewards.reviews.reward`. Count `PULL_COLLABORATOR` comments.
+*   **Engagement & Timeliness:** Partially available from `getTimeSeriesData(OrgRepoStructure)` output (event timestamps). Deeper analysis might require iterating `OrgRepoStructure` for specific `task.timestamp` vs comment timestamps.
 
 ### 6.2. Team Dynamics Insights
 
-*   **Work Distribution:** Compare aggregated `total` XP, task counts, or issue/PR counts across `userId`s.
-*   **Collaboration Patterns:** Track cross-contributor interactions (`ISSUE_COLLABORATOR`, `PULL_COLLABORATOR`) on issues/PRs.
-*   **Team Communication Quality:** Aggregate team-wide averages for `comments.score.readability` and `comments.score.formatting`.
+*   **Work Distribution:** Compare `totalXP`, `repoBreakdown`, or `issuePrCountBreakdown` from `getLeaderboardData(OrgRepoStructure)` output across contributors. Task counts require iterating `OrgRepoStructure`.
+*   **Collaboration Patterns:** Requires iterating through `OrgRepoStructure`. Track cross-contributor interactions (e.g., user A commenting on an issue where user B is the assignee or primary contributor based on `total` XP for that issue).
+*   **Team Communication Quality:** Requires iterating through `OrgRepoStructure`. Aggregate team-wide averages for `comments.score.readability.score` and `comments.score.formatting.result`.
 
 ### 6.3. Project Health Insights
 
-*   **Issue/PR Complexity Indicators:** Identify items with high `task.reward`, many high-scoring `ISSUE_SPECIFICATION` comments, or numerous contributors.
-*   **Activity Hotspots:** Aggregate contributors, comments, or XP per repository or issue/PR.
-*   **Review Load Distribution:** Analyze the distribution of `reviewRewards` across different reviewers.
+*   **Issue/PR Complexity Indicators:** Requires iterating through `OrgRepoStructure`. Identify issues/PRs with high `task.reward`, numerous high-scoring (`score.reward`, `score.relevance`) `ISSUE_SPECIFICATION` comments, or a large number of unique contributors per issue.
+*   **Activity Hotspots:** Can be derived from `repoBreakdown` in `getLeaderboardData(OrgRepoStructure)` output (XP per repo). Comment/contributor counts per repo/issue require iterating `OrgRepoStructure`.
+*   **Review Load Distribution:** Requires iterating through `OrgRepoStructure`. Analyze the distribution of `reviewRewards` across different reviewers (`userId`s associated with `PULL_COLLABORATOR` comments or specific review actions).
 
 ## 7. Analytics & Visualization Patterns
 
@@ -94,11 +102,12 @@ This section details how manager-focused insights are derived from the `rawData`
 
 ## 9. Assumptions for Insights
 
-*   `total` XP accurately reflects contribution value.
-*   `commentType` correctly categorizes contributions.
-*   `score` components (relevance, readability, formatting) are meaningful quality indicators.
-*   `reviewRewards.reward` correlates with review effort/impact.
-*   Timestamps are accurate.
+*   The `total` XP score within the `OrgRepoStructure` accurately reflects the overall contribution value for a contributor on a specific issue/PR.
+*   `commentType` correctly categorizes the nature of the contribution.
+*   `score` components (relevance, readability, formatting) provide meaningful indicators of quality.
+*   `reviewRewards.reward` correlates with review effort or impact.
+*   Timestamps (`task.timestamp`, `comments.timestamp`) are accurate and consistent.
+*   The `OrgRepoStructure` accurately represents the processed data from the source artifact.
 
 ## 10. Out of Scope
 

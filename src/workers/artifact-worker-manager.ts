@@ -2,16 +2,22 @@
  * Manages artifact processing worker initialization and communication.
  */
 
-import type { LeaderboardEntry, OrgRepoData, TimeSeriesEntry } from "../data-transform";
+import type { LeaderboardEntry, OrgRepoData, OrgRepoStructure, TimeSeriesEntry } from "../data-transform"; // Added OrgRepoStructure
 import { getLeaderboardData, getTimeSeriesData } from "../data-transform";
+import type { BreakdownResult } from "../analytics/contribution-breakdown";
+import { calculateContributionBreakdown } from "../analytics/contribution-breakdown";
+import type { QualityResult } from "../analytics/comment-quality";
+import { calculateCommentQuality } from "../analytics/comment-quality";
+import type { ReviewMetricsResult } from "../analytics/review-metrics"; // Import new type
+import { calculateReviewMetrics } from "../analytics/review-metrics"; // Import new function
 import { getArtifact } from "../db/get-artifact";
-import { normalizeOrgRepoData } from "../normalize-org-repo-data";
+// Removed normalizeOrgRepoData import as it's no longer used here
 
 type WorkerCallbacks = {
   onProgress: (phase: string, percent: number, detail: string) => void;
   onError: (error: Error) => void;
-  // Add rawData to the completion payload
-  onComplete: (data: { leaderboard: LeaderboardEntry[], timeSeries: TimeSeriesEntry[], rawData?: OrgRepoData }) => void;
+  // Add breakdown, quality, and review metrics to the completion payload
+  onComplete: (data: { leaderboard: LeaderboardEntry[], timeSeries: TimeSeriesEntry[], breakdown: BreakdownResult, quality: QualityResult, reviews: ReviewMetricsResult, rawData?: OrgRepoData }) => void;
 };
 
 const DEFAULT_CALLBACKS: WorkerCallbacks = {
@@ -72,12 +78,15 @@ export async function loadArtifactData(
     const cachedData = await loadFromIndexedDB(runId);
 
     if (cachedData) {
-      let orgData = cachedData[runId];
-      orgData = normalizeOrgRepoData({ [runId]: orgData }, runId)[runId];
+      const orgData = cachedData[runId]; // This is OrgRepoStructure
+      // Removed call to normalizeOrgRepoData as it's a no-op and caused type errors
       callbacks.onComplete({
-        leaderboard: getLeaderboardData({ [runId]: orgData }),
-        timeSeries: getTimeSeriesData({ [runId]: orgData }),
-        rawData: cachedData // Pass raw data on cache hit too
+        leaderboard: getLeaderboardData(orgData), // Pass OrgRepoStructure directly
+        timeSeries: getTimeSeriesData(orgData), // Pass OrgRepoStructure directly
+        breakdown: calculateContributionBreakdown(orgData), // Calculate breakdown
+        quality: calculateCommentQuality(orgData), // Calculate quality
+        reviews: calculateReviewMetrics(orgData), // Calculate review metrics
+        rawData: { [runId]: orgData } // Re-wrap for consistency if needed downstream, or adjust consumer
       });
       console.log("Cache hit! Using data from IndexedDB.");
       return; // <<<--- Return here if cache hit
@@ -111,10 +120,11 @@ export async function loadArtifactData(
           throw new Error("Invalid data received from worker");
         }
 
-        let orgData = msg.data[runId] as OrgRepoData[string];
-        orgData = normalizeOrgRepoData({ [runId]: orgData }, runId)[runId];
+        const orgData = msg.data[runId] as OrgRepoStructure; // Explicitly type as OrgRepoStructure
+        // Removed call to normalizeOrgRepoData as it's a no-op and caused type errors
 
         try {
+          // Save the original (non-normalized, as normalization is no-op) data
           const blob = new Blob([JSON.stringify(orgData)], { type: "application/json" });
           const { saveArtifact } = await import("../db/save-artifact");
           await saveArtifact(runId, blob);
@@ -123,9 +133,12 @@ export async function loadArtifactData(
         }
 
         callbacks.onComplete({
-          leaderboard: getLeaderboardData({ [runId]: orgData }),
-          timeSeries: getTimeSeriesData({ [runId]: orgData }),
-          rawData: msg.data // Pass the raw data as well
+          leaderboard: getLeaderboardData(orgData), // Pass orgData directly
+          timeSeries: getTimeSeriesData(orgData), // Pass orgData directly
+          breakdown: calculateContributionBreakdown(orgData), // Calculate breakdown
+          quality: calculateCommentQuality(orgData), // Calculate quality
+          reviews: calculateReviewMetrics(orgData), // Calculate review metrics
+          rawData: { [runId]: orgData } // Pass the re-wrapped raw data for consistency if needed downstream
         });
         break;
 

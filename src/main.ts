@@ -1,12 +1,16 @@
 import "./components/recent-runs-widget"; // Updated import
 import type { LeaderboardEntry, TimeSeriesEntry } from "./data-transform";
+import type { BreakdownResult } from "./analytics/contribution-breakdown"; // Import new type
+import type { QualityResult } from "./analytics/comment-quality"; // Import new type
+import type { ReviewMetricsResult } from "./analytics/review-metrics"; // Import new type
 import { cubicBezier, getRunIdFromQuery, isProduction } from "./utils";
 import { renderLeaderboardChart } from "./visualization/leaderboard-chart";
 import { renderTimeSeriesChart } from "./visualization/time-series-chart";
+import { InsightsView } from "./components/insights-view"; // Import the new component
 import { cleanupWorker, loadArtifactData } from "./workers/artifact-worker-manager";
 import { calculateContributorXpAtTime } from "./calculate-contributor-xp-at-time"; // Import the new helper
 
-type ViewMode = "leaderboard" | "timeseries";
+type ViewMode = "leaderboard" | "timeseries" | "insights"; // Add insights view mode
 
 // Set up loading overlay
 const loadingOverlay = document.createElement("div");
@@ -40,7 +44,10 @@ async function init() {
     // Initialize even if runId is null, but data loading depends on it
     let leaderboardData: LeaderboardEntry[] = [];
     let timeSeriesData: TimeSeriesEntry[] = [];
-    let viewMode: ViewMode = "leaderboard";
+    let breakdownData: BreakdownResult = {}; // State for breakdown
+    let qualityData: QualityResult = {}; // State for quality
+    let reviewData: ReviewMetricsResult = {}; // State for reviews
+    let viewMode: ViewMode = "leaderboard"; // Default view
     let selectedContributor: string = "All";
     let currentTimeValue: number = 0; // Current slider value (minutes since epoch)
     let globalMaxCumulativeXP: number = 1; // Renamed from maxYValue, represents overall max XP
@@ -58,7 +65,8 @@ async function init() {
     const root = document.getElementById("xp-analytics-root")!;
     const chartArea = document.getElementById("xp-analytics-chart-area")!;
     const contributorSelect = document.getElementById("contributor-select") as HTMLSelectElement;
-    const viewToggle = document.getElementById("view-toggle") as HTMLButtonElement;
+    const viewToggle = document.getElementById("view-toggle") as HTMLButtonElement; // Existing toggle
+    const insightsToggle = document.getElementById("insights-toggle") as HTMLButtonElement; // New toggle button
     const scaleToggle = document.getElementById("scale-toggle") as HTMLButtonElement; // Get scale toggle button
     const issueFilterInput = document.getElementById("issue-filter-input") as HTMLInputElement; // Get issue filter input
     const timeRange = document.getElementById("time-range") as HTMLInputElement;
@@ -124,9 +132,8 @@ async function init() {
           scaleMode: scaleMode,
           overallMaxXP: globalMaxCumulativeXP // Pass the overall max XP for consistent scaling
         });
-        // timeRangeText = ""; // REMOVED: Will set label text after if/else block
 
-      } else { // Time Series View
+      } else if (viewMode === "timeseries") { // Time Series View
         // Filter time series data by contributor if not "All"
         let filteredByContributor = selectedContributor === "All"
           ? timeSeriesData
@@ -175,9 +182,21 @@ async function init() {
          } else {
             timeRangeText = ""; // Show nothing if time range isn't calculated yet
         }
-      } // End of else for Time Series View
+      } else { // Insights View
+          // Render the Insights View component
+          const insightsElement = InsightsView({
+              breakdownData,
+              qualityData,
+              reviewData,
+              leaderboardData, // Pass leaderboard for contributor list/sorting
+              selectedContributor
+          });
+          chartArea.appendChild(insightsElement);
+          // Insights view doesn't use the time range slider in this basic implementation
+          timeRangeText = "Overall Metrics";
+      } // End of Insights View
 
-      // --- Update time range label (now applies to both views) ---
+      // --- Update time range label (applies to all views) ---
       if (timeRangeLabel) {
           if (globalMinTimeMs !== null && globalMaxTimeMs !== null) {
               const currentDisplayTimeMs = currentTimeValue * MS_PER_MINUTE;
@@ -192,8 +211,15 @@ async function init() {
           }
           timeRangeLabel.textContent = timeRangeText;
       }
-      // Update toggle button label
-      viewToggle.textContent = viewMode === "leaderboard" ? "Leaderboard" : "Time Series";
+      // Update toggle button labels (adjust logic if more toggles are added)
+      viewToggle.textContent = viewMode === "leaderboard" ? "Leaderboard" : (viewMode === "timeseries" ? "Time Series" : "Insights");
+      // Consider disabling/enabling controls based on viewMode if needed
+      const timeControls = document.getElementById("time-controls");
+      const issueFilterGroup = document.getElementById("issue-filter");
+      if (timeControls) timeControls.style.display = viewMode === 'insights' ? 'none' : '';
+      if (issueFilterGroup) issueFilterGroup.style.display = viewMode === 'timeseries' ? '' : 'none';
+
+
     }
 
     function animateTimeline() {
@@ -339,6 +365,15 @@ async function init() {
       render(); // Render the new view
     });
 
+    // Event listener for the new Insights toggle button
+    insightsToggle?.addEventListener("click", () => {
+        viewMode = "insights";
+        isAnimating = false; // Stop animation
+        chartArea.style.height = ''; // Reset fixed height
+        render();
+    });
+
+
     scaleToggle.addEventListener("click", () => {
         scaleMode = scaleMode === 'linear' ? 'log' : 'linear';
         scaleToggle.textContent = scaleMode === 'linear' ? "Use Log Scale" : "Use Linear Scale";
@@ -381,10 +416,22 @@ async function init() {
         },
         onComplete: (data) => {
           loadingOverlay.remove();
+          // Store all received data
           leaderboardData = data.leaderboard;
           timeSeriesData = data.timeSeries;
+          breakdownData = data.breakdown;
+          qualityData = data.quality;
+          reviewData = data.reviews;
 
-          (window as any).analyticsData = data;
+          // Expose all data for debugging
+          (window as any).analyticsData = {
+            leaderboard: data.leaderboard,
+            timeSeries: data.timeSeries,
+            breakdown: data.breakdown,
+            quality: data.quality,
+            reviews: data.reviews,
+            rawData: data.rawData // Keep rawData exposure if needed
+          };
           console.log("%c✨ Developer Note: Access all analytics data via window.analyticsData", "color: #00e0ff; font-weight: bold;");
           console.log("Leaderboard Data:", leaderboardData);
           console.log("Time Series Data:", timeSeriesData);
@@ -458,6 +505,7 @@ async function init() {
       // Hide elements that depend on run data
       if (contributorSelect) contributorSelect.style.display = 'none';
       if (viewToggle) viewToggle.style.display = 'none';
+      if (insightsToggle) insightsToggle.style.display = 'none'; // Hide insights toggle too
       if (scaleToggle) scaleToggle.style.display = 'none';
       if (issueFilterInput?.parentElement) issueFilterInput.parentElement.style.display = 'none'; // Hide filter group
       if (timeRange?.parentElement) timeRange.parentElement.style.display = 'none'; // Hide slider container
