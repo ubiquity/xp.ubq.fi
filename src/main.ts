@@ -4,6 +4,7 @@ import { cubicBezier, getRunIdFromQuery, isProduction } from "./utils";
 import { renderLeaderboardChart } from "./visualization/leaderboard-chart";
 import { renderTimeSeriesChart } from "./visualization/time-series-chart";
 import { cleanupWorker, loadArtifactData } from "./workers/artifact-worker-manager";
+import { calculateContributorXpAtTime } from "./calculate-contributor-xp-at-time"; // Import the new helper
 
 type ViewMode = "leaderboard" | "timeseries";
 
@@ -66,39 +67,72 @@ async function init() {
 
     // --- Render function ---
     function render() {
+      // Ensure data is loaded before rendering
+      if (!leaderboardData.length && !timeSeriesData.length && runId) {
+          // Data might still be loading, or failed to load
+          // Avoid rendering if essential data is missing (unless no runId was specified)
+          console.warn("Render called before data was ready.");
+          return;
+      }
+
       chartArea.innerHTML = "";
       const timeRangeLabel = document.getElementById("time-range-label") as HTMLSpanElement;
       let timeRangeText = "";
 
+      // Calculate cutoff time based on slider value
+      let cutoffTimeMs: number = globalMaxTimeMs ?? Date.now(); // Default to max time if not calculated yet
+      if (globalMinTimeMs !== null && globalMaxTimeMs !== null) {
+          cutoffTimeMs = currentTimeValue * MS_PER_MINUTE;
+          cutoffTimeMs = Math.min(cutoffTimeMs, globalMaxTimeMs); // Ensure it doesn't exceed max
+          cutoffTimeMs = Math.max(cutoffTimeMs, globalMinTimeMs); // Ensure it doesn't go below min
+      }
+
+
       if (viewMode === "leaderboard") {
-        // Filter leaderboard data by contributor if not "All"
+        // Calculate leaderboard state at the current cutoff time
+        const xpAtTime = calculateContributorXpAtTime(timeSeriesData, cutoffTimeMs);
+
+        // Create temporary leaderboard data for rendering
+        const leaderboardForRender: LeaderboardEntry[] = leaderboardData
+            .map(originalEntry => {
+                const currentXP = xpAtTime[originalEntry.contributor] ?? 0;
+                // Return a new object, preserving original breakdowns but updating totalXP
+                return {
+                    ...originalEntry, // Copy userId, original breakdowns etc.
+                    totalXP: currentXP, // Set the calculated XP at cutoff time
+                };
+            })
+            .filter(entry => entry.totalXP > 0) // Optionally filter out those with 0 XP at this time
+            .sort((a, b) => b.totalXP - a.totalXP); // Sort by current XP
+
+        // Recalculate ranks based on the current state
+        const currentRanks: { [contributor: string]: number } = {};
+        leaderboardForRender.forEach((entry, index) => {
+            currentRanks[entry.contributor] = index + 1;
+        });
+
+        // Filter based on dropdown selection
         const filtered = selectedContributor === "All"
-          ? leaderboardData
-          : leaderboardData.filter((entry) => entry.contributor === selectedContributor);
+          ? leaderboardForRender
+          : leaderboardForRender.filter((entry) => entry.contributor === selectedContributor);
 
         renderLeaderboardChart(filtered, chartArea, {
-          // Let leaderboard determine its own height based on entries
-          highlightContributor: selectedContributor !== "All" ? selectedContributor : leaderboardData[0]?.contributor,
-          ranks: ranks, // Pass the ranks object
-          scaleMode: scaleMode, // Pass the scale mode
+          highlightContributor: selectedContributor !== "All" ? selectedContributor : leaderboardForRender[0]?.contributor,
+          ranks: currentRanks, // Pass the recalculated ranks
+          scaleMode: scaleMode,
         });
         timeRangeText = ""; // No time range label for leaderboard
-      } else {
+
+      } else { // Time Series View
         // Filter time series data by contributor if not "All"
         let filtered = selectedContributor === "All"
           ? timeSeriesData
           : timeSeriesData.filter((entry) => entry.contributor === selectedContributor);
 
-        // Calculate cutoff time based on slider value, but don't filter data here
-        let cutoffTimeMs: number | undefined = undefined;
-        if (globalMinTimeMs !== null && globalMaxTimeMs !== null) {
-           cutoffTimeMs = currentTimeValue * MS_PER_MINUTE;
-           // Ensure cutoff doesn't exceed max time (can happen due to rounding/ceil)
-            cutoffTimeMs = Math.min(cutoffTimeMs, globalMaxTimeMs);
-         }
-         // Filtering is now handled within renderTimeSeriesChart based on cutoffTimeMs
+        // Cutoff time already calculated above
+        // Filtering is handled within renderTimeSeriesChart based on cutoffTimeMs
 
-         // Calculate animation progress only if animating
+        // Calculate animation progress only if animating
         const animationProgress = isAnimating && globalMaxTimeMins > globalMinTimeMins
           ? (currentTimeValue - globalMinTimeMins) / (globalMaxTimeMins - globalMinTimeMins)
           : 1; // Default to 1 (no fade) if not animating or range is zero
@@ -243,8 +277,13 @@ async function init() {
       // Store max height and fix it (use chartArea's actual height now)
       chartArea.style.height = `${chartArea.offsetHeight}px`;
 
-      // Start animation
-      animateTimeline();
+      // Start animation (only if runId exists and data loaded)
+      if (runId && leaderboardData.length > 0) {
+          animateTimeline();
+      } else {
+          // If no runId or no data, just do initial render without animation
+          render();
+      }
     }
 
     // --- Event listeners ---
@@ -283,6 +322,7 @@ async function init() {
     timeRange.addEventListener("input", () => {
       isAnimating = false; // Stop animation if user interacts
       currentTimeValue = parseInt(timeRange.value, 10);
+      // No need to recalculate leaderboard here, render() will do it
       render();
     });
 
