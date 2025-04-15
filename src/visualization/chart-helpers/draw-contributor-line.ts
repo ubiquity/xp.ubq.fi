@@ -11,6 +11,7 @@ type SvgPoint = {
     time: number;
     xp: number; // Note: This is cumulative XP from process-chart-data
     eventType: string;
+    issueOrPr: string; // Add issue/PR identifier
     url?: string;
     scoreDetails?: CommentScoreDetails; // Add score details
     contentPreview?: string; // Add content preview
@@ -88,13 +89,26 @@ export function drawContributorLine({
 
     let targetOpacity = isError ? maxTargetOpacity : baseMappedOpacity;
 
+    // If highlighted (filtered view), force full opacity
+    if (isHighlight) {
+        targetOpacity = 1.0;
+    }
+
     let finalOpacity = targetOpacity;
     if (animationProgress !== undefined && animationProgress < 1) {
+        // Apply animation progress, but respect the target (1.0 for highlight)
         finalOpacity = targetOpacity * animationProgress;
     }
 
-    finalOpacity = Math.max(animationProgress === 0 ? 0 : minTargetOpacity, finalOpacity);
-    finalOpacity = Math.min(maxTargetOpacity, finalOpacity);
+    // Adjust clamping: only apply min/max target range if NOT highlighted
+    if (!isHighlight) {
+        finalOpacity = Math.max(animationProgress === 0 ? 0 : minTargetOpacity, finalOpacity);
+        finalOpacity = Math.min(maxTargetOpacity, finalOpacity);
+    } else {
+        // If highlighted, ensure it stays 1.0 unless animation is 0
+        finalOpacity = animationProgress === 0 ? 0 : 1.0;
+    }
+
 
     const finalLineOpacity = finalOpacity;
     const finalPointOpacity = finalOpacity;
@@ -136,6 +150,7 @@ export function drawContributorLine({
             xp: pt.xp, // Cumulative XP
             pointXP: pt.pointXP, // XP for this specific point
             eventType: pt.eventType,
+            issueOrPr: pt.issueOrPr, // Pass through issue/PR identifier
             url: pt.url,
             scoreDetails: pt.scoreDetails,
             contentPreview: pt.contentPreview
@@ -218,7 +233,50 @@ export function drawContributorLine({
                       diamond.setAttribute("fill", GOOD);
                       diamond.setAttribute("opacity", finalPointOpacity.toString());
                       pointElement = diamond;
-                 } else {
+                 } else if (pt.eventType === 'REVIEW_REWARD') { // Specific case for review rewards - Use warning style but green
+                      const group = document.createElementNS(svgNS, "g") as SVGGElement;
+                      group.setAttribute("opacity", finalPointOpacity.toString()); // Apply opacity to the group
+                      const diamondSize = 36; // Size of the diamond background (width/height)
+                      const diamondRadius = diamondSize / 2;
+                      const textFontSize = 24;
+
+                      // Background Diamond (Green)
+                      const bgDiamond = document.createElementNS(svgNS, "polygon") as SVGPolygonElement;
+                      const diamondPoints = [
+                          `${pt.x},${pt.y - diamondRadius}`, `${pt.x + diamondRadius},${pt.y}`,
+                          `${pt.x},${pt.y + diamondRadius}`, `${pt.x - diamondRadius},${pt.y}`
+                      ].join(" ");
+                      bgDiamond.setAttribute("points", diamondPoints);
+                      // Use a specific green color with transparency
+                      const explicitGreen = "#28a745"; // Explicit green color
+                      bgDiamond.setAttribute("fill", `${explicitGreen}66`); // Green background (~40% opacity using hex alpha)
+                      bgDiamond.setAttribute("transform", `translate(0,3)`); // Center the diamond
+                      group.appendChild(bgDiamond);
+
+                      // Checkmark Symbol Text (Green)
+                      const checkMark = document.createElementNS(svgNS, "text") as SVGTextElement;
+                      checkMark.setAttribute("x", pt.x.toString());
+                      checkMark.setAttribute("y", pt.y.toString());
+                      checkMark.setAttribute("fill", explicitGreen); // Explicit green symbol
+                      checkMark.setAttribute("font-size", `${textFontSize}px`); // Set font size
+                      checkMark.setAttribute("font-weight", "bold");
+                      checkMark.setAttribute("text-anchor", "middle");
+                      checkMark.setAttribute("dominant-baseline", "central");
+                      checkMark.setAttribute("class", "chart-reward-symbol"); // Use a different class if needed
+                      checkMark.textContent = "✔"; // Checkmark symbol
+                      group.appendChild(checkMark);
+
+                      pointElement = group;
+
+                      // Make clickable if URL exists (review rewards should have groupUrl)
+                      if (pt.url) {
+                          pointElement.style.cursor = "pointer";
+                          pointElement.addEventListener("click", () => {
+                              window.open(pt.url, '_blank');
+                          });
+                      }
+
+                 } else { // Default case (e.g., 'comment' without specific type)
                       const circle = document.createElementNS(svgNS, "circle") as SVGCircleElement;
                       circle.setAttribute("cx", pt.x.toString());
                       circle.setAttribute("cy", pt.y.toString());
@@ -326,6 +384,7 @@ export function drawContributorLine({
                     `${entry.contributor}`,
                     '──────────',
                     rankText,
+                    `Issue/PR: #${pt.issueOrPr}`, // Add Issue/PR number
                     `Role: ${eventTypeText}`,
                     `XP: ${pointXP} (${percentageOfTotal}%)`, // Show point XP and its % of current total
                     `Total XP: ${totalXP}`,

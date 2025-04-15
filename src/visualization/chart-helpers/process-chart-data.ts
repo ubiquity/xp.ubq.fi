@@ -12,6 +12,7 @@ type CumulativePoint = {
   time: number;
   xp: number; // This will store the *cumulative* XP at this point in time
   eventType: string;
+  issueOrPr: string; // Add issue/PR identifier
   url?: string;
   pointXP: number; // Store the XP gained *at this specific point*
   scoreDetails?: CommentScoreDetails; // Add optional score details
@@ -46,6 +47,7 @@ export function processChartData({
         time: pointTime,
         xp: cumulative, // Store cumulative XP
         eventType: pt.eventType, // Pass through eventType
+        issueOrPr: pt.issueOrPr, // Pass through issue/PR identifier
         url: pt.url, // Pass through url
         pointXP: pt.xp, // Store the XP for this specific point
         scoreDetails: pt.scoreDetails, // Pass through score details
@@ -108,6 +110,7 @@ export function processChartData({
                time: cutoffTimeMs,
                xp: interpolatedXP,
                eventType: prevPoint.eventType, // Use previous point's type
+               issueOrPr: prevPoint.issueOrPr, // Use previous point's issue/PR
                url: prevPoint.url, // Use previous point's url
                pointXP: 0, // Interpolated point has 0 specific XP gain
                scoreDetails: undefined, // Interpolated points don't have specific score details

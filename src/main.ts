@@ -1,12 +1,16 @@
 import "./components/recent-runs-widget"; // Updated import
 import type { LeaderboardEntry, TimeSeriesEntry } from "./data-transform";
+import type { OverviewResult } from "./analytics/contribution-overview"; // Import new type
+import type { QualityResult } from "./analytics/comment-quality"; // Import new type
+import type { ReviewMetricsResult } from "./analytics/review-metrics"; // Import new type
 import { cubicBezier, getRunIdFromQuery, isProduction } from "./utils";
 import { renderLeaderboardChart } from "./visualization/leaderboard-chart";
 import { renderTimeSeriesChart } from "./visualization/time-series-chart";
+import { InsightsView } from "./components/insights-view"; // Import the new component
 import { cleanupWorker, loadArtifactData } from "./workers/artifact-worker-manager";
 import { calculateContributorXpAtTime } from "./calculate-contributor-xp-at-time"; // Import the new helper
 
-type ViewMode = "leaderboard" | "timeseries";
+type ViewMode = "leaderboard" | "timeseries" | "insights"; // Add insights view mode
 
 // Set up loading overlay
 const loadingOverlay = document.createElement("div");
@@ -40,7 +44,10 @@ async function init() {
     // Initialize even if runId is null, but data loading depends on it
     let leaderboardData: LeaderboardEntry[] = [];
     let timeSeriesData: TimeSeriesEntry[] = [];
-    let viewMode: ViewMode = "leaderboard";
+    let overviewData: OverviewResult = {}; // State for overview
+    let qualityData: QualityResult = {}; // State for quality
+    let reviewData: ReviewMetricsResult = {}; // State for reviews
+    let viewMode: ViewMode = "leaderboard"; // Default view
     let selectedContributor: string = "All";
     let currentTimeValue: number = 0; // Current slider value (minutes since epoch)
     let globalMaxCumulativeXP: number = 1; // Renamed from maxYValue, represents overall max XP
@@ -52,13 +59,16 @@ async function init() {
     let globalMaxTimeMins: number = 0; // In minutes since epoch
     let isAnimating: boolean = false; // Flag to control fade-in
     let scaleMode: 'linear' | 'log' = 'linear'; // Add scale mode state
+    let issueFilterValue: string = ''; // State for issue filter input
 
     // --- UI Elements ---
     const root = document.getElementById("xp-analytics-root")!;
     const chartArea = document.getElementById("xp-analytics-chart-area")!;
     const contributorSelect = document.getElementById("contributor-select") as HTMLSelectElement;
-    const viewToggle = document.getElementById("view-toggle") as HTMLButtonElement;
+    const viewToggle = document.getElementById("view-toggle") as HTMLButtonElement; // Consolidated toggle
+    // const insightsToggle = document.getElementById("insights-toggle") as HTMLButtonElement; // Removed redundant toggle
     const scaleToggle = document.getElementById("scale-toggle") as HTMLButtonElement; // Get scale toggle button
+    const issueFilterInput = document.getElementById("issue-filter-input") as HTMLInputElement; // Get issue filter input
     const timeRange = document.getElementById("time-range") as HTMLInputElement;
     const contextLabel = document.getElementById("xp-analytics-context-label") as HTMLSpanElement;
     const avatarImg = document.getElementById("xp-analytics-org-avatar") as HTMLImageElement;
@@ -96,9 +106,9 @@ async function init() {
         const leaderboardForRender: LeaderboardEntry[] = leaderboardData
             .map(originalEntry => {
                 const currentXP = xpAtTime[originalEntry.contributor] ?? 0;
-                // Return a new object, preserving original breakdowns but updating totalXP
+                // Return a new object, preserving original overviews but updating totalXP
                 return {
-                    ...originalEntry, // Copy userId, original breakdowns etc.
+                    ...originalEntry, // Copy userId, original overviews etc.
                     totalXP: currentXP, // Set the calculated XP at cutoff time
                 };
             })
@@ -122,13 +132,22 @@ async function init() {
           scaleMode: scaleMode,
           overallMaxXP: globalMaxCumulativeXP // Pass the overall max XP for consistent scaling
         });
-        // timeRangeText = ""; // REMOVED: Will set label text after if/else block
 
-      } else { // Time Series View
+      } else if (viewMode === "timeseries") { // Time Series View
         // Filter time series data by contributor if not "All"
-        let filtered = selectedContributor === "All"
+        let filteredByContributor = selectedContributor === "All"
           ? timeSeriesData
           : timeSeriesData.filter((entry) => entry.contributor === selectedContributor);
+
+        // Apply issue filter if set
+        let filteredDataForChart = filteredByContributor;
+        const currentIssueFilter = issueFilterValue.trim();
+        if (currentIssueFilter.length > 0) {
+            filteredDataForChart = filteredByContributor.map(contributorEntry => {
+                const filteredSeries = contributorEntry.series.filter(point => point.issueOrPr === currentIssueFilter);
+                return { ...contributorEntry, series: filteredSeries };
+            }).filter(contributorEntry => contributorEntry.series.length > 0);
+        }
 
         // Cutoff time already calculated above
         // Filtering is handled within renderTimeSeriesChart based on cutoffTimeMs
@@ -138,7 +157,7 @@ async function init() {
           ? (currentTimeValue - globalMinTimeMins) / (globalMaxTimeMins - globalMinTimeMins)
           : 1; // Default to 1 (no fade) if not animating or range is zero
 
-        renderTimeSeriesChart(filtered, chartArea, {
+        renderTimeSeriesChart(filteredDataForChart, chartArea, { // Pass the filtered data
           // Do not pass fixed height, let the renderer use container height
           highlightContributor: selectedContributor !== "All" ? selectedContributor : (highestScorer ?? undefined),
           maxYValue: globalMaxCumulativeXP, // Pass overall max XP to timeline Y-axis
@@ -163,9 +182,21 @@ async function init() {
          } else {
             timeRangeText = ""; // Show nothing if time range isn't calculated yet
         }
-      } // End of else for Time Series View
+      } else { // Insights View
+          // Render the Insights View component
+          const insightsElement = InsightsView({
+              overviewData,
+              qualityData,
+              reviewData,
+              leaderboardData, // Pass leaderboard for contributor list/sorting
+              selectedContributor
+          });
+          chartArea.appendChild(insightsElement);
+          // Insights view doesn't use the time range slider in this basic implementation
+          timeRangeText = "Overall Metrics";
+      } // End of Insights View
 
-      // --- Update time range label (now applies to both views) ---
+      // --- Update time range label (applies to all views) ---
       if (timeRangeLabel) {
           if (globalMinTimeMs !== null && globalMaxTimeMs !== null) {
               const currentDisplayTimeMs = currentTimeValue * MS_PER_MINUTE;
@@ -180,8 +211,21 @@ async function init() {
           }
           timeRangeLabel.textContent = timeRangeText;
       }
-      // Update toggle button label
-      viewToggle.textContent = viewMode === "leaderboard" ? "Leaderboard" : "Time Series";
+      // Update toggle button label based on the current viewMode
+      if (viewMode === "leaderboard") {
+        viewToggle.textContent = "Leaderboard";
+      } else if (viewMode === "timeseries") {
+        viewToggle.textContent = "Time Series";
+      } else {
+        viewToggle.textContent = "Insights";
+      }
+      // Consider disabling/enabling controls based on viewMode if needed
+      const timeControls = document.getElementById("time-controls");
+      const issueFilterGroup = document.getElementById("issue-filter");
+      if (timeControls) timeControls.style.display = viewMode === 'insights' ? 'none' : '';
+      if (issueFilterGroup) issueFilterGroup.style.display = viewMode === 'timeseries' ? '' : 'none';
+
+
     }
 
     function animateTimeline() {
@@ -310,13 +354,22 @@ async function init() {
     });
 
     viewToggle.addEventListener("click", () => {
-      viewMode = viewMode === "leaderboard" ? "timeseries" : "leaderboard";
+      // Cycle through the three views: leaderboard -> timeseries -> insights -> leaderboard
+      if (viewMode === "leaderboard") {
+        viewMode = "timeseries";
+      } else if (viewMode === "timeseries") {
+        viewMode = "insights";
+      } else { // viewMode === "insights"
+        viewMode = "leaderboard";
+      }
+
       isAnimating = false; // Stop animation if user interacts
-      // Reset chart area height if switching away from timeseries
-      if (viewMode === 'leaderboard') {
-        chartArea.style.height = ''; // Allow leaderboard to set its height
-      } else {
-        // If switching back to timeseries, re-sync state and potentially re-fix height/animate
+
+      // Reset chart area height if switching to leaderboard or insights
+      if (viewMode === 'leaderboard' || viewMode === 'insights') {
+        chartArea.style.height = ''; // Allow leaderboard/insights to set its height
+      } else { // Switching to timeseries
+        // Re-sync state and potentially re-fix height/animate
         currentTimeValue = parseInt(timeRange.value, 10); // Sync state with slider
         // Re-render once to establish potential new height before fixing/animating
         render();
@@ -326,6 +379,8 @@ async function init() {
       }
       render(); // Render the new view
     });
+
+    // Removed event listener for insightsToggle
 
     scaleToggle.addEventListener("click", () => {
         scaleMode = scaleMode === 'linear' ? 'log' : 'linear';
@@ -340,6 +395,16 @@ async function init() {
       currentTimeValue = parseInt(timeRange.value, 10);
       // No need to recalculate leaderboard here, render() will do it
       render();
+    });
+
+    issueFilterInput.addEventListener("input", () => {
+      issueFilterValue = issueFilterInput.value;
+      isAnimating = false; // Stop animation if user interacts
+      // Re-render the current view (only timeseries is affected by this filter)
+      if (viewMode === 'timeseries') {
+        render();
+      }
+      // Note: Leaderboard view is not affected by issue filter in this implementation
     });
 
     // --- Load Data (only if runId is valid) ---
@@ -359,10 +424,22 @@ async function init() {
         },
         onComplete: (data) => {
           loadingOverlay.remove();
+          // Store all received data
           leaderboardData = data.leaderboard;
           timeSeriesData = data.timeSeries;
+          overviewData = data.overview;
+          qualityData = data.quality;
+          reviewData = data.reviews;
 
-          (window as any).analyticsData = data;
+          // Expose all data for debugging
+          (window as any).analyticsData = {
+            leaderboard: data.leaderboard,
+            timeSeries: data.timeSeries,
+            overview: data.overview,
+            quality: data.quality,
+            reviews: data.reviews,
+            rawData: data.rawData // Keep rawData exposure if needed
+          };
           console.log("%c✨ Developer Note: Access all analytics data via window.analyticsData", "color: #00e0ff; font-weight: bold;");
           console.log("Leaderboard Data:", leaderboardData);
           console.log("Time Series Data:", timeSeriesData);
@@ -436,7 +513,10 @@ async function init() {
       // Hide elements that depend on run data
       if (contributorSelect) contributorSelect.style.display = 'none';
       if (viewToggle) viewToggle.style.display = 'none';
-      if (timeRange) timeRange.parentElement?.style.display === 'none'; // Hide slider container
+      // insightsToggle is removed
+      if (scaleToggle) scaleToggle.style.display = 'none';
+      if (issueFilterInput?.parentElement) issueFilterInput.parentElement.style.display = 'none'; // Hide filter group
+      if (timeRange?.parentElement) timeRange.parentElement.style.display = 'none'; // Hide slider container
       if (contextLabel) contextLabel.textContent = 'No Report Selected';
       if (avatarImg) avatarImg.style.display = 'none';
     }

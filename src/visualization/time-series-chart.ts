@@ -134,8 +134,9 @@ export function renderTimeSeriesChart(
   const scaleMode = options?.scaleMode ?? 'linear'; // Get scale mode
 
   // --- Data Processing using Helper ---
+  // Data filtering should happen *before* calling this function
   const finalContributorData: ProcessedContributorData[] = processChartData({
-      data,
+      data, // Expect pre-filtered data if filtering is applied
       cutoffTimeMs: options?.cutoffTimeMs
   });
 
