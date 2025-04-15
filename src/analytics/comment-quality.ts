@@ -5,7 +5,8 @@ export type CommentQualityMetrics = {
   averageFormattingScore: number;
   averageReadabilityScore: number;
   averageRelevanceScore: number;
-  commentCount: number; // To provide context for the averages
+  commentCount: number;
+  totalCommentXp: number; // Sum of XP from comments included in quality calculation
 };
 
 // Type for the result map
@@ -28,6 +29,7 @@ export function calculateCommentQuality(data: OrgRepoStructure): QualityResult {
       formattingSum: number;
       readabilitySum: number;
       relevanceSum: number;
+      commentXpSum: number; // Add sum for comment XP
       commentCount: number;
     };
   } = {};
@@ -45,6 +47,7 @@ export function calculateCommentQuality(data: OrgRepoStructure): QualityResult {
             formattingSum: 0,
             readabilitySum: 0,
             relevanceSum: 0,
+            commentXpSum: 0, // Initialize comment XP sum
             commentCount: 0,
           };
         }
@@ -61,6 +64,8 @@ export function calculateCommentQuality(data: OrgRepoStructure): QualityResult {
             userTempQuality.readabilitySum += score.readability?.score ?? 0;
             // Use relevance score if available, otherwise default to 0
             userTempQuality.relevanceSum += score.relevance ?? 0;
+            // Sum the comment's reward
+            userTempQuality.commentXpSum += score.reward ?? 0;
           }
         }
       }
@@ -76,6 +81,7 @@ export function calculateCommentQuality(data: OrgRepoStructure): QualityResult {
       averageReadabilityScore: count > 0 ? totals.readabilitySum / count : 0,
       averageRelevanceScore: count > 0 ? totals.relevanceSum / count : 0,
       commentCount: count,
+      totalCommentXp: totals.commentXpSum, // Assign the summed comment XP
     };
   }
 

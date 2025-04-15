@@ -331,6 +331,31 @@ text {
   white-space: normal; /* Allow contributor name to wrap if needed */
 }
 
+/* Make consolidated headers look clickable and add sort indicators */
+.insights-table.consolidated th {
+  cursor: pointer;
+  position: relative; /* For positioning the indicator */
+}
+
+.insights-table.consolidated th:hover {
+  background-color: #333; /* Slight hover effect */
+}
+
+.insights-table.consolidated th.sorted {
+  background-color: #444; /* Indicate sorted column */
+}
+
+/* Style for sort indicators (using text content ▲/▼ added in JS) */
+.insights-table.consolidated th::after {
+  /* content: ''; */ /* Content is set in JS */
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 10px;
+  line-height: 1;
+}
+
 
 .contributor-separator {
     border: 0;

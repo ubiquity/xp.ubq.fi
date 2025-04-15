@@ -16,8 +16,15 @@ import { getArtifact } from "../db/get-artifact";
 type WorkerCallbacks = {
   onProgress: (phase: string, percent: number, detail: string) => void;
   onError: (error: Error) => void;
-  // Add breakdown, quality, and review metrics to the completion payload
-  onComplete: (data: { leaderboard: LeaderboardEntry[], timeSeries: TimeSeriesEntry[], breakdown: BreakdownResult, quality: QualityResult, reviews: ReviewMetricsResult, rawData?: OrgRepoData }) => void;
+  // Update completion payload to reflect category-specific XP sums
+  onComplete: (data: {
+    leaderboard: LeaderboardEntry[], // Contains overall totalXP
+    timeSeries: TimeSeriesEntry[],
+    breakdown: BreakdownResult, // Contains tasksXp, issueSpecificationsXp, etc.
+    quality: QualityResult, // Contains totalCommentXp
+    reviews: ReviewMetricsResult, // Contains totalReviewReward
+    rawData?: OrgRepoData
+  }) => void;
 };
 
 const DEFAULT_CALLBACKS: WorkerCallbacks = {

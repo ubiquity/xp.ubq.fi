@@ -1,13 +1,20 @@
 import type { OrgRepoStructure, ContributorAnalytics } from "../data-transform";
 
-// Define the structure for the contribution breakdown
+// Define the structure for the contribution breakdown, including XP sums per category
 export type ContributionBreakdown = {
+  // Counts
   tasksAssigned: number;
   issueSpecifications: number;
   pullSpecifications: number;
-  issueComments: number; // General comments on issues
-  pullComments: number; // General comments on PRs (reviews, discussions)
-  reviewsConducted: number; // Number of distinct review actions/groups
+  issueComments: number;
+  pullComments: number;
+  reviewsConducted: number; // Note: Review XP is calculated in review-metrics.ts
+  // XP Sums
+  tasksXp: number;
+  issueSpecificationsXp: number;
+  pullSpecificationsXp: number;
+  issueCommentsXp: number;
+  pullCommentsXp: number;
   // Add more categories as needed based on commentType analysis
 };
 
@@ -35,48 +42,62 @@ export function calculateContributionBreakdown(data: OrgRepoStructure): Breakdow
         // Initialize breakdown for contributor if not present
         if (!breakdown[contributor]) {
           breakdown[contributor] = {
+            // Counts
             tasksAssigned: 0,
             issueSpecifications: 0,
             pullSpecifications: 0,
             issueComments: 0,
             pullComments: 0,
             reviewsConducted: 0,
+            // XP Sums
+            tasksXp: 0,
+            issueSpecificationsXp: 0,
+            pullSpecificationsXp: 0,
+            issueCommentsXp: 0,
+            pullCommentsXp: 0,
           };
         }
         const userBreakdown = breakdown[contributor];
 
-        // Count assigned tasks (assuming reward > 0 means assigned/completed)
+        // Count and sum XP for assigned tasks
         if (analytics.task?.reward && analytics.task.reward > 0) {
           userBreakdown.tasksAssigned += 1;
+          userBreakdown.tasksXp += analytics.task.reward;
         }
 
-        // Count comment types
+        // Count comment types and sum their XP rewards
         const comments = Array.isArray(analytics.comments) ? analytics.comments : [];
         for (const comment of comments) {
+          const reward = comment.score?.reward ?? 0; // Get comment reward, default to 0
           switch (comment.commentType) {
             case "ISSUE_SPECIFICATION":
               userBreakdown.issueSpecifications += 1;
+              userBreakdown.issueSpecificationsXp += reward;
               break;
             case "PULL_SPECIFICATION":
               userBreakdown.pullSpecifications += 1;
+              userBreakdown.pullSpecificationsXp += reward;
               break;
-            case "ISSUE_AUTHOR": // Treat author comments like regular comments for now
+            case "ISSUE_AUTHOR":
             case "ISSUE_COLLABORATOR":
-            case "ISSUE_CONTRIBUTOR": // Assuming general issue comments fall here
+            case "ISSUE_CONTRIBUTOR":
               userBreakdown.issueComments += 1;
+              userBreakdown.issueCommentsXp += reward;
               break;
-            case "PULL_AUTHOR": // Treat author comments like regular comments for now
+            case "PULL_AUTHOR":
             case "PULL_COLLABORATOR":
-            case "PULL_CONTRIBUTOR": // Assuming general PR comments fall here
+            case "PULL_CONTRIBUTOR":
               userBreakdown.pullComments += 1;
+              userBreakdown.pullCommentsXp += reward;
               break;
             default:
-              // Count unknown types as general comments based on URL? Needs refinement.
-              // For now, let's tentatively categorize based on issue/PR context if type unknown
+              // Categorize unknown types based on URL and sum XP
               if (comment.url?.includes("/issues/")) {
                  userBreakdown.issueComments += 1;
+                 userBreakdown.issueCommentsXp += reward;
               } else if (comment.url?.includes("/pull/")) {
                  userBreakdown.pullComments += 1;
+                 userBreakdown.pullCommentsXp += reward;
               }
               break;
           }
