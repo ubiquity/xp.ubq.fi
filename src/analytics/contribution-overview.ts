@@ -1,7 +1,7 @@
 import type { OrgRepoStructure, ContributorAnalytics } from "../data-transform";
 
-// Define the structure for the contribution breakdown, including XP sums per category
-export type ContributionBreakdown = {
+// Define the structure for the contribution overview, including XP sums per category
+export type ContributionOverview = {
   // Counts
   tasksAssigned: number;
   issueSpecifications: number;
@@ -19,18 +19,18 @@ export type ContributionBreakdown = {
 };
 
 // Type for the result map
-export type BreakdownResult = {
-  [contributor: string]: ContributionBreakdown;
+export type OverviewResult = {
+  [contributor: string]: ContributionOverview;
 };
 
 /**
- * Calculates the breakdown of contribution types for each contributor.
+ * Calculates the overview of contribution types for each contributor.
  *
  * @param data The OrgRepoStructure containing contribution data for a specific run.
- * @returns A map where keys are contributor names and values are their contribution breakdown counts.
+ * @returns A map where keys are contributor names and values are their contribution overview counts.
  */
-export function calculateContributionBreakdown(data: OrgRepoStructure): BreakdownResult {
-  const breakdown: BreakdownResult = {};
+export function calculateContributionOverview(data: OrgRepoStructure): OverviewResult {
+  const overview: OverviewResult = {};
 
   for (const repo in data) {
     const repoData = data[repo];
@@ -39,9 +39,9 @@ export function calculateContributionBreakdown(data: OrgRepoStructure): Breakdow
       for (const contributor in issueData) {
         const analytics: ContributorAnalytics = issueData[contributor];
 
-        // Initialize breakdown for contributor if not present
-        if (!breakdown[contributor]) {
-          breakdown[contributor] = {
+        // Initialize overview for contributor if not present
+        if (!overview[contributor]) {
+          overview[contributor] = {
             // Counts
             tasksAssigned: 0,
             issueSpecifications: 0,
@@ -57,12 +57,12 @@ export function calculateContributionBreakdown(data: OrgRepoStructure): Breakdow
             pullCommentsXp: 0,
           };
         }
-        const userBreakdown = breakdown[contributor];
+        const userOverview = overview[contributor];
 
         // Count and sum XP for assigned tasks
         if (analytics.task?.reward && analytics.task.reward > 0) {
-          userBreakdown.tasksAssigned += 1;
-          userBreakdown.tasksXp += analytics.task.reward;
+          userOverview.tasksAssigned += 1;
+          userOverview.tasksXp += analytics.task.reward;
         }
 
         // Count comment types and sum their XP rewards
@@ -71,33 +71,33 @@ export function calculateContributionBreakdown(data: OrgRepoStructure): Breakdow
           const reward = comment.score?.reward ?? 0; // Get comment reward, default to 0
           switch (comment.commentType) {
             case "ISSUE_SPECIFICATION":
-              userBreakdown.issueSpecifications += 1;
-              userBreakdown.issueSpecificationsXp += reward;
+              userOverview.issueSpecifications += 1;
+              userOverview.issueSpecificationsXp += reward;
               break;
             case "PULL_SPECIFICATION":
-              userBreakdown.pullSpecifications += 1;
-              userBreakdown.pullSpecificationsXp += reward;
+              userOverview.pullSpecifications += 1;
+              userOverview.pullSpecificationsXp += reward;
               break;
             case "ISSUE_AUTHOR":
             case "ISSUE_COLLABORATOR":
             case "ISSUE_CONTRIBUTOR":
-              userBreakdown.issueComments += 1;
-              userBreakdown.issueCommentsXp += reward;
+              userOverview.issueComments += 1;
+              userOverview.issueCommentsXp += reward;
               break;
             case "PULL_AUTHOR":
             case "PULL_COLLABORATOR":
             case "PULL_CONTRIBUTOR":
-              userBreakdown.pullComments += 1;
-              userBreakdown.pullCommentsXp += reward;
+              userOverview.pullComments += 1;
+              userOverview.pullCommentsXp += reward;
               break;
             default:
               // Categorize unknown types based on URL and sum XP
               if (comment.url?.includes("/issues/")) {
-                 userBreakdown.issueComments += 1;
-                 userBreakdown.issueCommentsXp += reward;
+                 userOverview.issueComments += 1;
+                 userOverview.issueCommentsXp += reward;
               } else if (comment.url?.includes("/pull/")) {
-                 userBreakdown.pullComments += 1;
-                 userBreakdown.pullCommentsXp += reward;
+                 userOverview.pullComments += 1;
+                 userOverview.pullCommentsXp += reward;
               }
               break;
           }
@@ -106,16 +106,16 @@ export function calculateContributionBreakdown(data: OrgRepoStructure): Breakdow
         // Count review actions/groups
         const reviewRewards = Array.isArray(analytics.reviewRewards) ? analytics.reviewRewards : [];
         // Count each reward group as one "review conducted" instance for simplicity
-        userBreakdown.reviewsConducted += reviewRewards.length;
+        userOverview.reviewsConducted += reviewRewards.length;
         // Alternatively, count individual reviews:
         // reviewRewards.forEach(group => {
         //   if (Array.isArray(group.reviews)) {
-        //     userBreakdown.reviewsConducted += group.reviews.length;
+        //     userOverview.reviewsConducted += group.reviews.length;
         //   }
         // });
       }
     }
   }
 
-  return breakdown;
+  return overview;
 }

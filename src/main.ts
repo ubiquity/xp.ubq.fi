@@ -1,6 +1,6 @@
 import "./components/recent-runs-widget"; // Updated import
 import type { LeaderboardEntry, TimeSeriesEntry } from "./data-transform";
-import type { BreakdownResult } from "./analytics/contribution-breakdown"; // Import new type
+import type { OverviewResult } from "./analytics/contribution-overview"; // Import new type
 import type { QualityResult } from "./analytics/comment-quality"; // Import new type
 import type { ReviewMetricsResult } from "./analytics/review-metrics"; // Import new type
 import { cubicBezier, getRunIdFromQuery, isProduction } from "./utils";
@@ -44,7 +44,7 @@ async function init() {
     // Initialize even if runId is null, but data loading depends on it
     let leaderboardData: LeaderboardEntry[] = [];
     let timeSeriesData: TimeSeriesEntry[] = [];
-    let breakdownData: BreakdownResult = {}; // State for breakdown
+    let overviewData: OverviewResult = {}; // State for overview
     let qualityData: QualityResult = {}; // State for quality
     let reviewData: ReviewMetricsResult = {}; // State for reviews
     let viewMode: ViewMode = "leaderboard"; // Default view
@@ -106,9 +106,9 @@ async function init() {
         const leaderboardForRender: LeaderboardEntry[] = leaderboardData
             .map(originalEntry => {
                 const currentXP = xpAtTime[originalEntry.contributor] ?? 0;
-                // Return a new object, preserving original breakdowns but updating totalXP
+                // Return a new object, preserving original overviews but updating totalXP
                 return {
-                    ...originalEntry, // Copy userId, original breakdowns etc.
+                    ...originalEntry, // Copy userId, original overviews etc.
                     totalXP: currentXP, // Set the calculated XP at cutoff time
                 };
             })
@@ -185,7 +185,7 @@ async function init() {
       } else { // Insights View
           // Render the Insights View component
           const insightsElement = InsightsView({
-              breakdownData,
+              overviewData,
               qualityData,
               reviewData,
               leaderboardData, // Pass leaderboard for contributor list/sorting
@@ -419,7 +419,7 @@ async function init() {
           // Store all received data
           leaderboardData = data.leaderboard;
           timeSeriesData = data.timeSeries;
-          breakdownData = data.breakdown;
+          overviewData = data.overview;
           qualityData = data.quality;
           reviewData = data.reviews;
 
@@ -427,7 +427,7 @@ async function init() {
           (window as any).analyticsData = {
             leaderboard: data.leaderboard,
             timeSeries: data.timeSeries,
-            breakdown: data.breakdown,
+            overview: data.overview,
             quality: data.quality,
             reviews: data.reviews,
             rawData: data.rawData // Keep rawData exposure if needed

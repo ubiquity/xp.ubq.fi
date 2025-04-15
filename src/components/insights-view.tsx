@@ -1,10 +1,10 @@
-import type { BreakdownResult, ContributionBreakdown } from "../analytics/contribution-breakdown";
+import type { OverviewResult, ContributionOverview } from "../analytics/contribution-overview";
 import type { QualityResult, CommentQualityMetrics } from "../analytics/comment-quality";
 import type { ReviewMetricsResult, ReviewMetrics } from "../analytics/review-metrics";
 import type { LeaderboardEntry } from "../data-transform"; // To get user IDs
 
 interface InsightsViewProps {
-  breakdownData: BreakdownResult;
+  overviewData: OverviewResult;
   qualityData: QualityResult;
   reviewData: ReviewMetricsResult;
   leaderboardData: LeaderboardEntry[]; // Still needed for the initial contributor list
@@ -21,7 +21,7 @@ type SortDirection = 'asc' | 'desc';
 type SortConfig = { key: string; dir: SortDirection };
 
 export function InsightsView({
-  breakdownData,
+  overviewData,
   qualityData,
   reviewData,
   leaderboardData,
@@ -31,7 +31,7 @@ export function InsightsView({
   container.className = "insights-view";
 
   // --- State for Sorting (Consolidated View Only) ---
-  let breakdownSort: SortConfig = { key: 'contributor', dir: 'asc' };
+  let overviewSort: SortConfig = { key: 'contributor', dir: 'asc' };
   let qualitySort: SortConfig = { key: 'contributor', dir: 'asc' };
   let reviewsSort: SortConfig = { key: 'contributor', dir: 'asc' };
 
@@ -55,7 +55,7 @@ export function InsightsView({
       const sortContributors = (
         contributors: string[],
         sortConfig: SortConfig,
-        tableData: BreakdownResult | QualityResult | ReviewMetricsResult
+        tableData: OverviewResult | QualityResult | ReviewMetricsResult
       ): string[] => {
         const { key, dir } = sortConfig;
         return [...contributors].sort((a, b) => {
@@ -70,20 +70,20 @@ export function InsightsView({
             const dataA = tableData[a];
             const dataB = tableData[b];
             // Use type assertion carefully, assuming key is valid for the given tableData type
-            // For breakdown category XP, we need to calculate the sum before sorting
-            if (key === 'breakdownXpSum') {
-                 valA = (dataA as ContributionBreakdown) ?
-                    ((dataA as ContributionBreakdown).tasksXp ?? 0) +
-                    ((dataA as ContributionBreakdown).issueSpecificationsXp ?? 0) +
-                    ((dataA as ContributionBreakdown).pullSpecificationsXp ?? 0) +
-                    ((dataA as ContributionBreakdown).issueCommentsXp ?? 0) +
-                    ((dataA as ContributionBreakdown).pullCommentsXp ?? 0) : undefined;
-                 valB = (dataB as ContributionBreakdown) ?
-                    ((dataB as ContributionBreakdown).tasksXp ?? 0) +
-                    ((dataB as ContributionBreakdown).issueSpecificationsXp ?? 0) +
-                    ((dataB as ContributionBreakdown).pullSpecificationsXp ?? 0) +
-                    ((dataB as ContributionBreakdown).issueCommentsXp ?? 0) +
-                    ((dataB as ContributionBreakdown).pullCommentsXp ?? 0) : undefined;
+            // For overview category XP, we need to calculate the sum before sorting
+            if (key === 'overviewXpSum') {
+                 valA = (dataA as ContributionOverview) ?
+                    ((dataA as ContributionOverview).tasksXp ?? 0) +
+                    ((dataA as ContributionOverview).issueSpecificationsXp ?? 0) +
+                    ((dataA as ContributionOverview).pullSpecificationsXp ?? 0) +
+                    ((dataA as ContributionOverview).issueCommentsXp ?? 0) +
+                    ((dataA as ContributionOverview).pullCommentsXp ?? 0) : undefined;
+                 valB = (dataB as ContributionOverview) ?
+                    ((dataB as ContributionOverview).tasksXp ?? 0) +
+                    ((dataB as ContributionOverview).issueSpecificationsXp ?? 0) +
+                    ((dataB as ContributionOverview).pullSpecificationsXp ?? 0) +
+                    ((dataB as ContributionOverview).issueCommentsXp ?? 0) +
+                    ((dataB as ContributionOverview).pullCommentsXp ?? 0) : undefined;
             } else {
                 valA = dataA ? (dataA as any)[key] : undefined;
                 valB = dataB ? (dataB as any)[key] : undefined;
@@ -107,7 +107,7 @@ export function InsightsView({
       };
 
       // --- Helper to create sortable headers ---
-      const createHeader = (text: string, key: string, sortState: SortConfig, tableType: 'breakdown' | 'quality' | 'reviews'): HTMLTableCellElement => {
+      const createHeader = (text: string, key: string, sortState: SortConfig, tableType: 'overview' | 'quality' | 'reviews'): HTMLTableCellElement => {
         const th = document.createElement('th');
         th.textContent = text;
         th.dataset.sortKey = key;
@@ -122,7 +122,7 @@ export function InsightsView({
             newDir = 'desc';
           }
           // Update the correct sort state
-          if (tableType === 'breakdown') breakdownSort = { key, dir: newDir };
+          if (tableType === 'overview') overviewSort = { key, dir: newDir };
           else if (tableType === 'quality') qualitySort = { key, dir: newDir };
           else if (tableType === 'reviews') reviewsSort = { key, dir: newDir };
           renderInsights(); // Re-render
@@ -130,42 +130,42 @@ export function InsightsView({
         return th;
       };
 
-      // --- Create and Populate Breakdown Table ---
-      const breakdownTable = document.createElement("table");
-      breakdownTable.className = "insights-table consolidated";
-      breakdownTable.createCaption().textContent = "Contribution Breakdown";
-      const breakdownHead = breakdownTable.createTHead().insertRow();
-      breakdownHead.appendChild(createHeader('Contributor', 'contributor', breakdownSort, 'breakdown'));
-      breakdownHead.appendChild(createHeader('Tasks', 'tasksAssigned', breakdownSort, 'breakdown'));
-      breakdownHead.appendChild(createHeader('Issue Specs', 'issueSpecifications', breakdownSort, 'breakdown'));
-      breakdownHead.appendChild(createHeader('PR Specs', 'pullSpecifications', breakdownSort, 'breakdown'));
-      breakdownHead.appendChild(createHeader('Issue Comments', 'issueComments', breakdownSort, 'breakdown'));
-      breakdownHead.appendChild(createHeader('PR Comments', 'pullComments', breakdownSort, 'breakdown'));
-      breakdownHead.appendChild(createHeader('Reviews', 'reviewsConducted', breakdownSort, 'breakdown'));
+      // --- Create and Populate Overview Table ---
+      const overviewTable = document.createElement("table");
+      overviewTable.className = "insights-table consolidated";
+      overviewTable.createCaption().textContent = "Contribution Overview";
+      const overviewHead = overviewTable.createTHead().insertRow();
+      overviewHead.appendChild(createHeader('Contributor', 'contributor', overviewSort, 'overview'));
+      overviewHead.appendChild(createHeader('Tasks', 'tasksAssigned', overviewSort, 'overview'));
+      overviewHead.appendChild(createHeader('Issue Specs', 'issueSpecifications', overviewSort, 'overview'));
+      overviewHead.appendChild(createHeader('PR Specs', 'pullSpecifications', overviewSort, 'overview'));
+      overviewHead.appendChild(createHeader('Issue Comments', 'issueComments', overviewSort, 'overview'));
+      overviewHead.appendChild(createHeader('PR Comments', 'pullComments', overviewSort, 'overview'));
+      overviewHead.appendChild(createHeader('Reviews', 'reviewsConducted', overviewSort, 'overview'));
       // Use a calculated key for sorting the summed XP
-      breakdownHead.appendChild(createHeader('Breakdown XP', 'breakdownXpSum', breakdownSort, 'breakdown'));
-      const breakdownBody = breakdownTable.createTBody();
-      const sortedBreakdownContributors = sortContributors(baseContributors, breakdownSort, breakdownData);
-      sortedBreakdownContributors.forEach(contributor => {
-        const breakdown = breakdownData[contributor];
-        const row = breakdownBody.insertRow();
-        const categoryXp = (breakdown?.tasksXp ?? 0) +
-                           (breakdown?.issueSpecificationsXp ?? 0) +
-                           (breakdown?.pullSpecificationsXp ?? 0) +
-                           (breakdown?.issueCommentsXp ?? 0) +
-                           (breakdown?.pullCommentsXp ?? 0);
+      overviewHead.appendChild(createHeader('Overview XP', 'overviewXpSum', overviewSort, 'overview'));
+      const overviewBody = overviewTable.createTBody();
+      const sortedOverviewContributors = sortContributors(baseContributors, overviewSort, overviewData);
+      sortedOverviewContributors.forEach(contributor => {
+        const overview = overviewData[contributor];
+        const row = overviewBody.insertRow();
+        const categoryXp = (overview?.tasksXp ?? 0) +
+                           (overview?.issueSpecificationsXp ?? 0) +
+                           (overview?.pullSpecificationsXp ?? 0) +
+                           (overview?.issueCommentsXp ?? 0) +
+                           (overview?.pullCommentsXp ?? 0);
         row.innerHTML = `
           <td>${contributor}</td>
-          <td>${formatInt(breakdown?.tasksAssigned)}</td>
-          <td>${formatInt(breakdown?.issueSpecifications)}</td>
-          <td>${formatInt(breakdown?.pullSpecifications)}</td>
-          <td>${formatInt(breakdown?.issueComments)}</td>
-          <td>${formatInt(breakdown?.pullComments)}</td>
-          <td>${formatInt(breakdown?.reviewsConducted)}</td>
+          <td>${formatInt(overview?.tasksAssigned)}</td>
+          <td>${formatInt(overview?.issueSpecifications)}</td>
+          <td>${formatInt(overview?.pullSpecifications)}</td>
+          <td>${formatInt(overview?.issueComments)}</td>
+          <td>${formatInt(overview?.pullComments)}</td>
+          <td>${formatInt(overview?.reviewsConducted)}</td>
           <td>${formatNum(categoryXp)}</td>
         `;
       });
-      container.appendChild(breakdownTable);
+      container.appendChild(overviewTable);
 
       // --- Create and Populate Quality Table ---
       const qualityTable = document.createElement("table");
@@ -203,8 +203,8 @@ export function InsightsView({
       reviewHead.appendChild(createHeader('PRs Rev.', 'pullsReviewedCount', reviewsSort, 'reviews'));
       reviewHead.appendChild(createHeader('Total Revs.', 'totalReviewsConducted', reviewsSort, 'reviews'));
       reviewHead.appendChild(createHeader('Lines Reviewed', 'totalLinesReviewed', reviewsSort, 'reviews'));
-      reviewHead.appendChild(createHeader('Review XP', 'totalReviewReward', reviewsSort, 'reviews')); // Changed header, key is correct
-      reviewHead.appendChild(createHeader('Avg Reward', 'averageReviewReward', reviewsSort, 'reviews'));
+      reviewHead.appendChild(createHeader('Review XP', 'totalReviewReward', reviewsSort, 'reviews')); // Changed header, key is correct for category total
+      // Removed Avg Reward header
       const reviewBody = reviewTable.createTBody();
       const sortedReviewContributors = sortContributors(baseContributors, reviewsSort, reviewData);
       sortedReviewContributors.forEach(contributor => {
@@ -216,7 +216,6 @@ export function InsightsView({
           <td>${formatInt(reviews?.totalReviewsConducted)}</td>
           <td>${formatInt(reviews?.totalLinesReviewed)}</td>
           <td>${formatNum(reviews?.totalReviewReward)}</td>
-          <td>${formatNum(reviews?.averageReviewReward)}</td>
         `;
       });
       container.appendChild(reviewTable);
@@ -224,11 +223,11 @@ export function InsightsView({
     } else {
       // --- Individual Contributor View (No changes needed here) ---
       const contributor = selectedContributor;
-      const breakdown = breakdownData[contributor];
+      const overview = overviewData[contributor];
       const quality = qualityData[contributor];
       const reviews = reviewData[contributor];
 
-      if (!breakdown && !quality && !reviews) {
+      if (!overview && !quality && !reviews) {
           container.textContent = `No detailed insights available for ${contributor}.`;
           return container;
       }
@@ -240,23 +239,23 @@ export function InsightsView({
       title.textContent = contributor;
       contributorContainer.appendChild(title);
 
-      // Breakdown Table (Individual)
-      if (breakdown) {
-        const breakdownTable = document.createElement("table");
-        breakdownTable.className = "insights-table";
-        const breakdownCaption = breakdownTable.createCaption();
-        breakdownCaption.textContent = "Contribution Breakdown";
-        const breakdownBody = breakdownTable.createTBody();
+      // Overview Table (Individual)
+      if (overview) {
+        const overviewTable = document.createElement("table");
+        overviewTable.className = "insights-table";
+        const overviewCaption = overviewTable.createCaption();
+        overviewCaption.textContent = "Contribution Overview";
+        const overviewBody = overviewTable.createTBody();
         // Add category XP here too? Maybe later.
-        breakdownBody.innerHTML = `
-          <tr><td>Tasks Assigned</td><td>${breakdown.tasksAssigned} (${formatNum(breakdown.tasksXp)} XP)</td></tr>
-          <tr><td>Issue Specs</td><td>${breakdown.issueSpecifications} (${formatNum(breakdown.issueSpecificationsXp)} XP)</td></tr>
-          <tr><td>PR Specs</td><td>${breakdown.pullSpecifications} (${formatNum(breakdown.pullSpecificationsXp)} XP)</td></tr>
-          <tr><td>Issue Comments</td><td>${breakdown.issueComments} (${formatNum(breakdown.issueCommentsXp)} XP)</td></tr>
-          <tr><td>PR Comments</td><td>${breakdown.pullComments} (${formatNum(breakdown.pullCommentsXp)} XP)</td></tr>
-          <tr><td>Reviews Conducted</td><td>${breakdown.reviewsConducted}</td></tr>
+        overviewBody.innerHTML = `
+          <tr><td>Tasks Assigned</td><td>${overview.tasksAssigned} (${formatNum(overview.tasksXp)} XP)</td></tr>
+          <tr><td>Issue Specs</td><td>${overview.issueSpecifications} (${formatNum(overview.issueSpecificationsXp)} XP)</td></tr>
+          <tr><td>PR Specs</td><td>${overview.pullSpecifications} (${formatNum(overview.pullSpecificationsXp)} XP)</td></tr>
+          <tr><td>Issue Comments</td><td>${overview.issueComments} (${formatNum(overview.issueCommentsXp)} XP)</td></tr>
+          <tr><td>PR Comments</td><td>${overview.pullComments} (${formatNum(overview.pullCommentsXp)} XP)</td></tr>
+          <tr><td>Reviews Conducted</td><td>${overview.reviewsConducted}</td></tr>
         `;
-        contributorContainer.appendChild(breakdownTable);
+        contributorContainer.appendChild(overviewTable);
       }
 
       // Quality Table (Individual)
@@ -281,12 +280,12 @@ export function InsightsView({
         const reviewCaption = reviewTable.createCaption();
         reviewCaption.textContent = `Review Metrics (${reviews.pullsReviewedCount} PRs, ${formatNum(reviews.totalReviewReward)} XP)`;
         const reviewBody = reviewTable.createTBody();
-        reviewBody.innerHTML = `
-          <tr><td>Total Reviews</td><td>${reviews.totalReviewsConducted}</td></tr>
-          <tr><td>Lines Reviewed</td><td>${reviews.totalLinesReviewed}</td></tr>
-          <tr><td>Avg Review Reward</td><td>${formatNum(reviews.averageReviewReward)}</td></tr>
-        `;
-        contributorContainer.appendChild(reviewTable);
+      reviewBody.innerHTML = `
+        <tr><td>Total Reviews</td><td>${reviews.totalReviewsConducted}</td></tr>
+        <tr><td>Lines Reviewed</td><td>${reviews.totalLinesReviewed}</td></tr>
+        {/* Removed Avg Review Reward row for consistency */}
+      `;
+      contributorContainer.appendChild(reviewTable);
       }
         container.appendChild(contributorContainer);
     }

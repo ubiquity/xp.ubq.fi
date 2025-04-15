@@ -4,8 +4,8 @@
 
 import type { LeaderboardEntry, OrgRepoData, OrgRepoStructure, TimeSeriesEntry } from "../data-transform"; // Added OrgRepoStructure
 import { getLeaderboardData, getTimeSeriesData } from "../data-transform";
-import type { BreakdownResult } from "../analytics/contribution-breakdown";
-import { calculateContributionBreakdown } from "../analytics/contribution-breakdown";
+import type { OverviewResult } from "../analytics/contribution-overview";
+import { calculateContributionOverview } from "../analytics/contribution-overview";
 import type { QualityResult } from "../analytics/comment-quality";
 import { calculateCommentQuality } from "../analytics/comment-quality";
 import type { ReviewMetricsResult } from "../analytics/review-metrics"; // Import new type
@@ -20,7 +20,7 @@ type WorkerCallbacks = {
   onComplete: (data: {
     leaderboard: LeaderboardEntry[], // Contains overall totalXP
     timeSeries: TimeSeriesEntry[],
-    breakdown: BreakdownResult, // Contains tasksXp, issueSpecificationsXp, etc.
+    overview: OverviewResult, // Contains tasksXp, issueSpecificationsXp, etc.
     quality: QualityResult, // Contains totalCommentXp
     reviews: ReviewMetricsResult, // Contains totalReviewReward
     rawData?: OrgRepoData
@@ -90,7 +90,7 @@ export async function loadArtifactData(
       callbacks.onComplete({
         leaderboard: getLeaderboardData(orgData), // Pass OrgRepoStructure directly
         timeSeries: getTimeSeriesData(orgData), // Pass OrgRepoStructure directly
-        breakdown: calculateContributionBreakdown(orgData), // Calculate breakdown
+        overview: calculateContributionOverview(orgData), // Calculate overview
         quality: calculateCommentQuality(orgData), // Calculate quality
         reviews: calculateReviewMetrics(orgData), // Calculate review metrics
         rawData: { [runId]: orgData } // Re-wrap for consistency if needed downstream, or adjust consumer
@@ -142,7 +142,7 @@ export async function loadArtifactData(
         callbacks.onComplete({
           leaderboard: getLeaderboardData(orgData), // Pass orgData directly
           timeSeries: getTimeSeriesData(orgData), // Pass orgData directly
-          breakdown: calculateContributionBreakdown(orgData), // Calculate breakdown
+          overview: calculateContributionOverview(orgData), // Calculate overview
           quality: calculateCommentQuality(orgData), // Calculate quality
           reviews: calculateReviewMetrics(orgData), // Calculate review metrics
           rawData: { [runId]: orgData } // Pass the re-wrapped raw data for consistency if needed downstream

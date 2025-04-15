@@ -69,21 +69,21 @@ This section details how manager-focused insights are derived by processing the 
 ### 6.1. Individual Performance Insights
 
 *   **Overall Contribution Score (XP):** Directly available as `totalXP` per contributor in the output of `getLeaderboardData(OrgRepoStructure)`.
-*   **Contribution Breakdown:** Requires iterating through the `OrgRepoStructure`. Count occurrences of different `commentType` values in `comments`, check `task.reward > 0`, and count `reviewRewards` entries per `userId`.
+*   **Contribution Overview:** Requires iterating through the `OrgRepoStructure`. Count occurrences of different `commentType` values in `comments`, check `task.reward > 0`, and count `reviewRewards` entries per `userId`.
 *   **Comment Quality Metrics:** Requires iterating through `OrgRepoStructure`. Calculate average `score.formatting.result`, `score.readability.score`, and `score.relevance` from the `comments` array per `userId`.
 *   **Review Impact & Thoroughness:** Requires iterating through `OrgRepoStructure`. Analyze `reviewRewards.reviews.effect` (additions/deletions) and `reviewRewards.reviews.reward`. Count `PULL_COLLABORATOR` comments.
 *   **Engagement & Timeliness:** Partially available from `getTimeSeriesData(OrgRepoStructure)` output (event timestamps). Deeper analysis might require iterating `OrgRepoStructure` for specific `task.timestamp` vs comment timestamps.
 
 ### 6.2. Team Dynamics Insights
 
-*   **Work Distribution:** Compare `totalXP`, `repoBreakdown`, or `issuePrCountBreakdown` from `getLeaderboardData(OrgRepoStructure)` output across contributors. Task counts require iterating `OrgRepoStructure`.
+*   **Work Distribution:** Compare `totalXP`, `repoOverview`, or `issuePrCountOverview` from `getLeaderboardData(OrgRepoStructure)` output across contributors. Task counts require iterating `OrgRepoStructure`.
 *   **Collaboration Patterns:** Requires iterating through `OrgRepoStructure`. Track cross-contributor interactions (e.g., user A commenting on an issue where user B is the assignee or primary contributor based on `total` XP for that issue).
 *   **Team Communication Quality:** Requires iterating through `OrgRepoStructure`. Aggregate team-wide averages for `comments.score.readability.score` and `comments.score.formatting.result`.
 
 ### 6.3. Project Health Insights
 
 *   **Issue/PR Complexity Indicators:** Requires iterating through `OrgRepoStructure`. Identify issues/PRs with high `task.reward`, numerous high-scoring (`score.reward`, `score.relevance`) `ISSUE_SPECIFICATION` comments, or a large number of unique contributors per issue.
-*   **Activity Hotspots:** Can be derived from `repoBreakdown` in `getLeaderboardData(OrgRepoStructure)` output (XP per repo). Comment/contributor counts per repo/issue require iterating `OrgRepoStructure`.
+*   **Activity Hotspots:** Can be derived from `repoOverview` in `getLeaderboardData(OrgRepoStructure)` output (XP per repo). Comment/contributor counts per repo/issue require iterating `OrgRepoStructure`.
 *   **Review Load Distribution:** Requires iterating through `OrgRepoStructure`. Analyze the distribution of `reviewRewards` across different reviewers (`userId`s associated with `PULL_COLLABORATOR` comments or specific review actions).
 
 ## 7. Analytics & Visualization Patterns

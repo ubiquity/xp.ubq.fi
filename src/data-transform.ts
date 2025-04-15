@@ -59,9 +59,9 @@ export type LeaderboardEntry = {
   contributor: string;
   userId: number;
   totalXP: number;
-  repoBreakdown: { [repo: string]: number };
-  issuePrCountBreakdown: { [repo: string]: number }; // Number of unique issues/prs per repo
-  issueBreakdown: { [issue: string]: number }; // XP per issue (issue = repo#issueNumber)
+  repoOverview: { [repo: string]: number };
+  issuePrCountOverview: { [repo: string]: number }; // Number of unique issues/prs per repo
+  issueOverview: { [issue: string]: number }; // XP per issue (issue = repo#issueNumber)
 };
 
 export type TimeSeriesDataPoint = {
@@ -98,7 +98,7 @@ export type OrgRepoData = {
 
 /**
  * Aggregates leaderboard data from the OrgRepoStructure (data stored per runId).
- * Returns an array of contributors with total XP and per-repo breakdown.
+ * Returns an array of contributors with total XP and per-repo overview.
  */
 export function getLeaderboardData(
   // Expects the structure containing repos directly, not keyed by org/runId
@@ -110,7 +110,7 @@ export function getLeaderboardData(
   });
   const leaderboard: Map<string, LeaderboardEntry> = new Map();
   const issuePrTracker: Map<string, { [repo: string]: Set<string> }> = new Map();
-  const issueBreakdownTracker: Map<string, { [issueKey: string]: number }> = new Map();
+  const issueOverviewTracker: Map<string, { [issueKey: string]: number }> = new Map();
 
   // Iterate directly over repos
   for (const repo in data) {
@@ -139,15 +139,15 @@ export function getLeaderboardData(
             contributor,
             userId: analytics.userId,
             totalXP: 0,
-            repoBreakdown: {},
-            issuePrCountBreakdown: {},
-            issueBreakdown: {},
+            repoOverview: {},
+            issuePrCountOverview: {},
+            issueOverview: {},
           });
         }
 
         const entry = leaderboard.get(contributor)!;
         entry.totalXP += analytics.total;
-        entry.repoBreakdown[repo] = (entry.repoBreakdown[repo] || 0) + analytics.total;
+        entry.repoOverview[repo] = (entry.repoOverview[repo] || 0) + analytics.total;
 
         // Track unique issues/prs per contributor per repo
         if (!issuePrTracker.has(contributor)) {
@@ -160,21 +160,21 @@ export function getLeaderboardData(
 
         // Track XP per issue (issueKey = repo#issueOrPr)
         const issueKey = `${repo}#${issueOrPr}`;
-        if (!issueBreakdownTracker.has(contributor)) {
-          issueBreakdownTracker.set(contributor, {});
+        if (!issueOverviewTracker.has(contributor)) {
+          issueOverviewTracker.set(contributor, {});
         }
-        issueBreakdownTracker.get(contributor)![issueKey] = (issueBreakdownTracker.get(contributor)![issueKey] || 0) + analytics.total;
+        issueOverviewTracker.get(contributor)![issueKey] = (issueOverviewTracker.get(contributor)![issueKey] || 0) + analytics.total;
       }
     }
   }
 
-  // Populate issuePrCountBreakdown and issueBreakdown
+  // Populate issuePrCountOverview and issueOverview
   for (const [contributor, entry] of leaderboard.entries()) {
     const repoMap = issuePrTracker.get(contributor) || {};
     for (const repo in repoMap) {
-      entry.issuePrCountBreakdown[repo] = repoMap[repo].size;
+      entry.issuePrCountOverview[repo] = repoMap[repo].size;
     }
-    entry.issueBreakdown = issueBreakdownTracker.get(contributor) || {};
+    entry.issueOverview = issueOverviewTracker.get(contributor) || {};
   }
 
   const result = Array.from(leaderboard.values()).sort((a, b) => b.totalXP - a.totalXP);

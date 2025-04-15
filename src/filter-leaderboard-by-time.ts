@@ -2,8 +2,8 @@ import type { LeaderboardEntry, TimeSeriesEntry } from "./data-transform";
 
 /**
  * Filters and adjusts leaderboard data to reflect the state at a specific cutoff time.
- * It recalculates totalXP and issueBreakdown based on time series data up to the cutoff.
- * Other properties like userId, repoBreakdown, issuePrCountBreakdown are preserved from the original data.
+ * It recalculates totalXP and issueOverview based on time series data up to the cutoff.
+ * Other properties like userId, repoOverview, issuePrCountOverview are preserved from the original data.
  *
  * @param fullLeaderboardData The complete, original leaderboard data.
  * @param fullTimeSeriesData The complete time series data.
@@ -46,20 +46,20 @@ export function filterLeaderboardDataByTime(
         let newTotalXP = 0;
         const contributorCutoffData = cumulativeXpAtCutoff[entry.contributor] ?? {};
 
-        // Adjust issueBreakdown
-        for (const issueKey in entry.issueBreakdown) {
+        // Adjust issueOverview
+        for (const issueKey in entry.issueOverview) {
             const xpAtCutoff = contributorCutoffData[issueKey] ?? 0;
             // The XP for an issue at cutoff cannot exceed its original total XP
-            // (This assumes issueBreakdown in fullLeaderboardData is the final total)
+            // (This assumes issueOverview in fullLeaderboardData is the final total)
             // We actually just want the cumulative value calculated up to the cutoff.
-            entry.issueBreakdown[issueKey] = xpAtCutoff;
+            entry.issueOverview[issueKey] = xpAtCutoff;
             newTotalXP += xpAtCutoff;
         }
 
         // Update totalXP
         entry.totalXP = newTotalXP;
 
-        // Note: repoBreakdown and issuePrCountBreakdown are NOT recalculated here.
+        // Note: repoOverview and issuePrCountOverview are NOT recalculated here.
         // They reflect the overall counts from the original data.
         // Recalculating them based on time would require more complex data/logic.
     }
