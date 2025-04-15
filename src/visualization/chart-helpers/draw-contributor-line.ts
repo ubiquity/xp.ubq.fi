@@ -220,7 +220,50 @@ export function drawContributorLine({
                       diamond.setAttribute("fill", GOOD);
                       diamond.setAttribute("opacity", finalPointOpacity.toString());
                       pointElement = diamond;
-                 } else {
+                 } else if (pt.eventType === 'REVIEW_REWARD') { // Specific case for review rewards - Use warning style but green
+                      const group = document.createElementNS(svgNS, "g") as SVGGElement;
+                      group.setAttribute("opacity", finalPointOpacity.toString()); // Apply opacity to the group
+                      const diamondSize = 36; // Size of the diamond background (width/height)
+                      const diamondRadius = diamondSize / 2;
+                      const textFontSize = 24;
+
+                      // Background Diamond (Green)
+                      const bgDiamond = document.createElementNS(svgNS, "polygon") as SVGPolygonElement;
+                      const diamondPoints = [
+                          `${pt.x},${pt.y - diamondRadius}`, `${pt.x + diamondRadius},${pt.y}`,
+                          `${pt.x},${pt.y + diamondRadius}`, `${pt.x - diamondRadius},${pt.y}`
+                      ].join(" ");
+                      bgDiamond.setAttribute("points", diamondPoints);
+                      // Use a specific green color with transparency
+                      const explicitGreen = "#28a745"; // Explicit green color
+                      bgDiamond.setAttribute("fill", `${explicitGreen}66`); // Green background (~40% opacity using hex alpha)
+                      bgDiamond.setAttribute("transform", `translate(0,3)`); // Center the diamond
+                      group.appendChild(bgDiamond);
+
+                      // Checkmark Symbol Text (Green)
+                      const checkMark = document.createElementNS(svgNS, "text") as SVGTextElement;
+                      checkMark.setAttribute("x", pt.x.toString());
+                      checkMark.setAttribute("y", pt.y.toString());
+                      checkMark.setAttribute("fill", explicitGreen); // Explicit green symbol
+                      checkMark.setAttribute("font-size", `${textFontSize}px`); // Set font size
+                      checkMark.setAttribute("font-weight", "bold");
+                      checkMark.setAttribute("text-anchor", "middle");
+                      checkMark.setAttribute("dominant-baseline", "central");
+                      checkMark.setAttribute("class", "chart-reward-symbol"); // Use a different class if needed
+                      checkMark.textContent = "✔"; // Checkmark symbol
+                      group.appendChild(checkMark);
+
+                      pointElement = group;
+
+                      // Make clickable if URL exists (review rewards should have groupUrl)
+                      if (pt.url) {
+                          pointElement.style.cursor = "pointer";
+                          pointElement.addEventListener("click", () => {
+                              window.open(pt.url, '_blank');
+                          });
+                      }
+
+                 } else { // Default case (e.g., 'comment' without specific type)
                       const circle = document.createElementNS(svgNS, "circle") as SVGCircleElement;
                       circle.setAttribute("cx", pt.x.toString());
                       circle.setAttribute("cy", pt.y.toString());

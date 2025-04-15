@@ -54,6 +54,16 @@ export type ContributorAnalytics = {
     url?: string; // Optional URL for the comment
     commentType?: string; // Optional type of comment (e.g., ISSUE_AUTHOR)
   }>;
+  // Add the reviewRewards structure
+  reviewRewards?: Array<{
+    reviews: Array<{
+      reviewId: number;
+      effect: { addition: number; deletion: number };
+      reward: number;
+      priority: number;
+    }>;
+    url?: string; // Optional URL for the review context
+  }>;
   evaluationCommentHtml: string | null;
 };
 
@@ -356,7 +366,53 @@ export function getTimeSeriesData(
               contentPreview: contentPreview // Add the content preview
             });
           }
-        }
+
+          // Handle review rewards events
+          const reviewRewards = Array.isArray(analytics.reviewRewards) ? analytics.reviewRewards : [];
+          for (const rewardGroup of reviewRewards) {
+            const groupUrl = rewardGroup.url; // URL for the whole review group (e.g., PR link)
+
+            // Check if rewardGroup.reviews is actually an array before iterating
+            if (Array.isArray(rewardGroup.reviews)) {
+              for (const review of rewardGroup.reviews) {
+                // We need a timestamp for the time series.
+                // Since reviewRewards don't have individual timestamps,
+              // we might need to approximate or use the task timestamp if available?
+              // Or perhaps the source data needs adjustment.
+              // For now, let's use the task timestamp if available, otherwise skip.
+              // A better approach might be needed depending on data source capabilities.
+
+              // Let's try using the LAST comment timestamp as a proxy if task timestamp is missing
+              // This is an approximation!
+              let eventTimestamp = analytics.task?.timestamp;
+              if (!eventTimestamp && comments.length > 0) {
+                  // Find the latest comment timestamp as a fallback
+                  const latestCommentTime = Math.max(...comments.map(c => new Date(c.timestamp).getTime()));
+                  if (isFinite(latestCommentTime)) {
+                      eventTimestamp = new Date(latestCommentTime).toISOString();
+                  }
+              }
+
+              if (!eventTimestamp || isNaN(new Date(eventTimestamp).getTime())) {
+                console.warn(`Skipping review reward for contributor "${contributor}" in issue "${issueOrPr}" due to missing timestamp. Review ID: ${review.reviewId}`);
+                continue; // Skip if no valid timestamp found
+              }
+
+              entry.series.push({
+                time: eventTimestamp, // Use approximated timestamp
+                xp: review.reward,
+                repo,
+                issueOrPr,
+                eventType: 'REVIEW_REWARD', // Assign specific event type
+                url: groupUrl, // Use the URL associated with the review group
+                // scoreDetails: undefined, // Review rewards don't have comment score details
+                // contentPreview: `Review Reward: ${review.reward} XP` // Simple preview
+                contentPreview: `Review Reward: +${review.effect.addition}/-${review.effect.deletion} lines` // Preview with diffstat
+              });
+            } // End inner loop (reviews)
+          } // End check for Array.isArray(rewardGroup.reviews)
+        } // End outer loop (rewardGroup)
+      }
       }
     }
   }

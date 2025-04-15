@@ -66,8 +66,11 @@ export async function loadArtifactData(
   partialCallbacks: Partial<WorkerCallbacks> = {}
 ): Promise<void> {
   const callbacks: WorkerCallbacks = { ...DEFAULT_CALLBACKS, ...partialCallbacks };
+
   try {
+    // Try loading from cache first
     const cachedData = await loadFromIndexedDB(runId);
+
     if (cachedData) {
       let orgData = cachedData[runId];
       orgData = normalizeOrgRepoData({ [runId]: orgData }, runId)[runId];
