@@ -1,3 +1,6 @@
+/// <reference lib="dom" />
+/// <reference lib="dom.iterable" />
+
 import {
   getRecentRuns,
   getWorkflowInputs,
@@ -6,7 +9,6 @@ import {
 } from "../db/recent-runs-cache";
 import { isProduction } from "../utils";
 
-// Renamed class
 export class RecentRunsWidget extends HTMLElement {
   private container!: HTMLDivElement;
   private runsContainer!: HTMLDivElement;
@@ -45,30 +47,52 @@ export class RecentRunsWidget extends HTMLElement {
   }
 
   private async loadWorkflowRuns() {
-    // 1. Try to load from cache and render instantly
-    let cachedRuns: any[] | null = null;
+    // Show spinner immediately
+    this.runsContainer.innerHTML = `
+      <div class="recent-runs-widget__loading">
+        <div class="recent-runs-widget__spinner"></div>
+        <div>Loading recent reports...</div>
+      </div>
+    `;
+
+    // 1. Try to load from cache first
     try {
-      cachedRuns = await getRecentRuns();
+      const cachedRuns = await getRecentRuns();
+      if (cachedRuns && Array.isArray(cachedRuns)) {
+        this.renderWorkflowRuns(cachedRuns, true);
+        // Update loading text while fetching fresh data
+        const loadingDiv = this.runsContainer.querySelector('.recent-runs-widget__loading');
+        if (loadingDiv) {
+          loadingDiv.innerHTML = `
+            <div class="recent-runs-widget__spinner"></div>
+            <div>Updating reports...</div>
+          `;
+        }
+      }
     } catch (e) {
       console.error("Error loading cached workflow runs:", e);
     }
-    if (cachedRuns && Array.isArray(cachedRuns)) {
-      this.renderWorkflowRuns(cachedRuns, true);
-    } else {
-      // Show loading state if no cache
-      this.runsContainer.innerHTML = '<div class="recent-runs-widget__loading">Loading recent reports...</div>'; // Updated class name
-    }
 
-    // 2. In parallel, fetch from API and update cache (do not re-render)
+    // 2. Fetch fresh data from API
     try {
       const response = await fetch("/api/workflow-runs");
       if (!response.ok) throw new Error("Failed to fetch workflow runs");
       const data = await response.json();
       if (Array.isArray(data.workflow_runs)) {
         await setRecentRuns(data.workflow_runs);
+        // Re-render with fresh data
+        this.renderWorkflowRuns(data.workflow_runs, false);
       }
     } catch (error) {
       console.error("Error fetching workflow runs from API:", error);
+      // Show error state if both cache and API fail
+      if (!this.runsContainer.querySelector('.workflow-run')) {
+        this.runsContainer.innerHTML = `
+          <div class="recent-runs-widget__error">
+            Failed to load reports
+          </div>
+        `;
+      }
     }
   }
 

@@ -2,7 +2,7 @@
   "lockfileVersion": 1,
   "workspaces": {
     "": {
-      "name": "bun-esbuild-frontend",
+      "name": "xp.ubq.fi",
       "dependencies": {
         "@elysiajs/static": "^1.2.0",
         "@zip.js/zip.js": "^2.7.60",
