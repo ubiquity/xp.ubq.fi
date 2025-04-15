@@ -65,8 +65,8 @@ async function init() {
     const root = document.getElementById("xp-analytics-root")!;
     const chartArea = document.getElementById("xp-analytics-chart-area")!;
     const contributorSelect = document.getElementById("contributor-select") as HTMLSelectElement;
-    const viewToggle = document.getElementById("view-toggle") as HTMLButtonElement; // Existing toggle
-    const insightsToggle = document.getElementById("insights-toggle") as HTMLButtonElement; // New toggle button
+    const viewToggle = document.getElementById("view-toggle") as HTMLButtonElement; // Consolidated toggle
+    // const insightsToggle = document.getElementById("insights-toggle") as HTMLButtonElement; // Removed redundant toggle
     const scaleToggle = document.getElementById("scale-toggle") as HTMLButtonElement; // Get scale toggle button
     const issueFilterInput = document.getElementById("issue-filter-input") as HTMLInputElement; // Get issue filter input
     const timeRange = document.getElementById("time-range") as HTMLInputElement;
@@ -211,8 +211,14 @@ async function init() {
           }
           timeRangeLabel.textContent = timeRangeText;
       }
-      // Update toggle button labels (adjust logic if more toggles are added)
-      viewToggle.textContent = viewMode === "leaderboard" ? "Leaderboard" : (viewMode === "timeseries" ? "Time Series" : "Insights");
+      // Update toggle button label based on the current viewMode
+      if (viewMode === "leaderboard") {
+        viewToggle.textContent = "Leaderboard";
+      } else if (viewMode === "timeseries") {
+        viewToggle.textContent = "Time Series";
+      } else {
+        viewToggle.textContent = "Insights";
+      }
       // Consider disabling/enabling controls based on viewMode if needed
       const timeControls = document.getElementById("time-controls");
       const issueFilterGroup = document.getElementById("issue-filter");
@@ -348,13 +354,22 @@ async function init() {
     });
 
     viewToggle.addEventListener("click", () => {
-      viewMode = viewMode === "leaderboard" ? "timeseries" : "leaderboard";
+      // Cycle through the three views: leaderboard -> timeseries -> insights -> leaderboard
+      if (viewMode === "leaderboard") {
+        viewMode = "timeseries";
+      } else if (viewMode === "timeseries") {
+        viewMode = "insights";
+      } else { // viewMode === "insights"
+        viewMode = "leaderboard";
+      }
+
       isAnimating = false; // Stop animation if user interacts
-      // Reset chart area height if switching away from timeseries
-      if (viewMode === 'leaderboard') {
-        chartArea.style.height = ''; // Allow leaderboard to set its height
-      } else {
-        // If switching back to timeseries, re-sync state and potentially re-fix height/animate
+
+      // Reset chart area height if switching to leaderboard or insights
+      if (viewMode === 'leaderboard' || viewMode === 'insights') {
+        chartArea.style.height = ''; // Allow leaderboard/insights to set its height
+      } else { // Switching to timeseries
+        // Re-sync state and potentially re-fix height/animate
         currentTimeValue = parseInt(timeRange.value, 10); // Sync state with slider
         // Re-render once to establish potential new height before fixing/animating
         render();
@@ -365,14 +380,7 @@ async function init() {
       render(); // Render the new view
     });
 
-    // Event listener for the new Insights toggle button
-    insightsToggle?.addEventListener("click", () => {
-        viewMode = "insights";
-        isAnimating = false; // Stop animation
-        chartArea.style.height = ''; // Reset fixed height
-        render();
-    });
-
+    // Removed event listener for insightsToggle
 
     scaleToggle.addEventListener("click", () => {
         scaleMode = scaleMode === 'linear' ? 'log' : 'linear';
@@ -505,7 +513,7 @@ async function init() {
       // Hide elements that depend on run data
       if (contributorSelect) contributorSelect.style.display = 'none';
       if (viewToggle) viewToggle.style.display = 'none';
-      if (insightsToggle) insightsToggle.style.display = 'none'; // Hide insights toggle too
+      // insightsToggle is removed
       if (scaleToggle) scaleToggle.style.display = 'none';
       if (issueFilterInput?.parentElement) issueFilterInput.parentElement.style.display = 'none'; // Hide filter group
       if (timeRange?.parentElement) timeRange.parentElement.style.display = 'none'; // Hide slider container

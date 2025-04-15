@@ -363,3 +363,8 @@ text {
     background-color: #444; /* Darker separator */
     margin-top: 8px; /* Space above separator */
 }
+
+
+button {
+    font-weight: 600;
+}
