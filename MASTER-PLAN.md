@@ -36,7 +36,7 @@ Ensure all artifact data (including analytics data) is cached in IndexedDB. On p
   - `userId`: number
   - `total`: XP earned (float)
   - `task`: { reward, multiplier }
-  - `comments`: array of comment objects (with XP breakdowns)
+  - `comments`: array of comment objects (with XP overviews)
   - `evaluationCommentHtml`: HTML summary (optional)
 
 **Transformation for Analytics:**
@@ -60,7 +60,7 @@ Main "Top Contributor" panel with:
   - X-axis: XP earned
   - Y-axis: Contributor names
   - Each bar: Total XP per contributor, grouped by repository (color-coded)
-  - Tooltip: Show breakdown by repo and XP
+  - Tooltip: Show overview by repo and XP
 
 **Time Series View:**
 - Line chart (sparkline per contributor):

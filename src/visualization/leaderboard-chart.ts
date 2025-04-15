@@ -98,7 +98,7 @@ export function renderLeaderboardChart(
   // Determine all issue keys (for consistent stacking order)
   // Issue key format: repo#issueNumber
   const allIssueKeys = Array.from(
-    new Set(data.flatMap(entry => Object.keys(entry.issueBreakdown)))
+    new Set(data.flatMap(entry => Object.keys(entry.issueOverview)))
   );
 
   // Find max XP of currently displayed data (for bar widths relative to current view)
@@ -203,7 +203,7 @@ export function renderLeaderboardChart(
 
   // Sort issue keys by XP for each contributor
   const sortIssuesByXP = (contributor: LeaderboardEntry) => {
-    return Object.entries(contributor.issueBreakdown)
+    return Object.entries(contributor.issueOverview)
       .sort(([, xp1], [, xp2]) => xp2 - xp1) // Sort by XP descending
       .map(([issueKey]) => issueKey);
   };
@@ -224,7 +224,7 @@ export function renderLeaderboardChart(
 
     // Draw stacked segments for each issue
     contributorIssues.forEach((issueKey, position) => {
-      const issueXP = entry.issueBreakdown[issueKey] ?? 0;
+      const issueXP = entry.issueOverview[issueKey] ?? 0;
       if (issueXP > 0) {
         let barW = 0;
         if (scaleMode === 'log') {

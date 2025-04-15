@@ -1,4 +1,4 @@
- * {
+* {
   color: #fff;
   font-family: monospace, sans-serif;
   text-rendering: geometricPrecision;
@@ -78,6 +78,31 @@ select {
   color: #fff;
   cursor: pointer;
 }
+
+/* Issue Filter Styles */
+.xp-analytics-filter-group {
+  display: flex;
+  align-items: center;
+  margin-left: 16px; /* Add some space from the spacer */
+}
+
+.xp-analytics-filter-label {
+  font-size: 12px;
+  color: #ccc;
+  margin-right: 8px;
+  white-space: nowrap; /* Prevent label wrapping */
+}
+
+.xp-analytics-filter-input {
+  font-size: 12px;
+  padding: 8px 12px; /* Match select padding */
+  border-radius: 4px;
+  border: 1px solid #444; /* Slightly visible border */
+  background-color: #222; /* Match button background */
+  color: #fff; /* Match button text color */
+  width: 150px; /* Adjust width as needed */
+}
+
 .xp-analytics-flex-spacer {
   flex: 1;
 }
@@ -225,4 +250,121 @@ text {
 /* Allow pointer events specifically for warning symbols so tooltips work */
 .chart-warning-symbol {
     pointer-events: auto;
+}
+
+/* --- Insights View Styles --- */
+.insights-view {
+  padding: 16px;
+  overflow-y: auto; /* Allow scrolling if content overflows */
+  height: 100%; /* Ensure it takes available height */
+  box-sizing: border-box;
+  color: #ccc; /* Lighter text for readability */
+}
+
+.contributor-insights {
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  /* border-bottom: 1px solid #333; */ /* Optional separator */
+}
+
+.contributor-insights h3 {
+  margin-top: 0;
+  margin-bottom: 12px;
+  font-size: 16px; /* Slightly larger font for contributor name */
+  color: #fff; /* White for emphasis */
+  border-bottom: 1px solid #444;
+  padding-bottom: 8px;
+}
+
+.insights-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 16px;
+  font-size: 12px;
+}
+
+.insights-table caption {
+  font-weight: bold;
+  text-align: left;
+  padding-bottom: 8px;
+  color: #eee;
+  font-size: 14px;
+}
+
+.insights-table td {
+  padding: 4px 8px;
+  border: 1px solid #333; /* Light borders */
+  text-align: left;
+}
+
+.insights-table td:first-child {
+  color: #aaa; /* Dim the labels slightly */
+  width: 180px; /* Fixed width for labels */
+}
+
+.insights-table td:last-child {
+  text-align: right;
+  font-weight: bold;
+  color: #fff; /* White for values */
+  width: 80px; /* Fixed width for values */
+}
+
+/* Styles for consolidated tables */
+.insights-table.consolidated {
+  table-layout: auto; /* Allow table to determine column widths */
+  width: 100%; /* Use full width */
+}
+
+.insights-table.consolidated th,
+.insights-table.consolidated td {
+  white-space: nowrap; /* Prevent text wrapping in cells */
+  text-align: right; /* Right-align numbers */
+  padding: 4px 8px; /* Consistent padding */
+}
+
+.insights-table.consolidated th:first-child,
+.insights-table.consolidated td:first-child {
+  text-align: left; /* Left-align contributor name */
+  font-weight: bold;
+  color: #fff;
+  width: auto; /* Allow contributor column to resize */
+  white-space: normal; /* Allow contributor name to wrap if needed */
+}
+
+/* Make consolidated headers look clickable and add sort indicators */
+.insights-table.consolidated th {
+  cursor: pointer;
+  position: relative; /* For positioning the indicator */
+}
+
+.insights-table.consolidated th:hover {
+  background-color: #333; /* Slight hover effect */
+}
+
+.insights-table.consolidated th.sorted {
+  background-color: #444; /* Indicate sorted column */
+}
+
+/* Style for sort indicators (using text content ▲/▼ added in JS) */
+.insights-table.consolidated th::after {
+  /* content: ''; */ /* Content is set in JS */
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 10px;
+  line-height: 1;
+}
+
+
+.contributor-separator {
+    border: 0;
+    height: 1px;
+    background-color: #444; /* Darker separator */
+    margin-top: 8px; /* Space above separator */
+}
+
+
+button {
+    font-weight: 600;
 }
