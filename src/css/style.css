@@ -84,6 +84,8 @@ select {
   color: #ccc;
   /* min-width: 120px; */
   text-align: center; /* Center the date range text */
+  display: block;
+  padding-top: 12px;
 }
 .xp-analytics-time-range-input {
   width: 100%; /* Make slider full width */
