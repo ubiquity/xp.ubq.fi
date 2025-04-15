@@ -12,8 +12,12 @@
   --chart-tooltip-bg: rgba(0, 0, 0, 0.95); /* Increased opacity */
   --chart-tooltip-text: #ffffff;
   --chart-tooltip-border: #444;
-  /* Warning: yellow/gold */
-  --chart-color-warning: #ffd700;
+  /* Additional colors for event types */
+  --chart-color-warning: #ffd700; /* Yellow/Gold */
+  --chart-color-purple: #a0f;    /* Purple */
+  --chart-color-green: #0f0;     /* Green */
+  --chart-color-orange: #f90;    /* Orange */
+  --chart-color-pink: #f0f;      /* Pink */
 }
 
 #xp-analytics-chart-area {

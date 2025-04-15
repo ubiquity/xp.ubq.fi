@@ -40,6 +40,7 @@ select {
   font-size: 20px;
   /* Add other styles as needed, e.g., margin-right */
   /* margin-left: 20px; */
+  /* font-weight: 600; */
 }
 
 /* Container for the slider above the chart */
@@ -218,6 +219,7 @@ text {
     user-select: none;
     /* Keep pointer-events: none; globally for non-interactive text like axes */
     pointer-events: none;
+    font-weight: 900;
 }
 
 /* Allow pointer events specifically for warning symbols so tooltips work */
