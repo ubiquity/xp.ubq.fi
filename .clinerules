@@ -1,54 +1,170 @@
-# Developer Performance Analytics Dashboard - Project Intelligence
+# Important
 
-## User Preferences
+- DO NOT fix eslint errors unless I specifically ask you to.
+- ALWAYS use bun to run typescript files. Never compile. Never node.
+- ALWAYS use bun to install packages for package.json.
+- Bun automatically imports .env files, you don't need to add dotenv.
+- If you find an .env file and I ask you to run the program, assume that it's already filled out with the correct values.
+- When creating new files, always rename them in `kebab-case.ts` not `camelCase.ts`
+- If I mention that you did something wrong that is not project specific (i.e. you used an invalid method from a library) and if the Perplexity MCP is installed, use Perplexity to search for the correct information.
+- All CSS styles MUST be in CSS files only. NEVER embed inside of HTML, or TypeScript files. If you find CSS inside of HTML or TypeScript files, move them to a CSS file and link it in the HTML or import it in the TypeScript file.
 
-- **CSS Approach**: Use plain CSS with direct editing in Chrome DevTools rather than frameworks like Tailwind. The user prefers to edit CSS directly in the browser and save to disk. Minimal styling in early development phases.
-- **Technology Selection**: Keep the tech stack simple and focused. Avoid unnecessary complexity.
-- **Development Philosophy**: Rapid MVP approach to get functional dashboard up quickly. Focus on simplicity over "proper" implementation until vision is clarified through real usage.
+## Prior To Task Completion
 
-## Implementation Patterns
+When you think you're done with your task:
+- Split functions up across different files. One function per file so that file lengths aren't too long.
+- Be sure to delete unused files, and to reduce workspace clutter.
 
-- **Data Visualization Approach**:
-  - Focus on flexible, dynamic visualization selection based on data dimensions
-  - Support permutations of any three data points in various chart types
-  - Automatically select appropriate chart type based on data characteristics
+# Cline's Docs
 
-- **Data Dimensions Categories**:
-  - Comment Types (ISSUE_SPECIFICATION, ISSUE_AUTHOR, ISSUE_ASSIGNEE, etc.)
-  - Quality Metrics (word count, readability score, relevance)
-  - Review Statistics (lines reviewed, review state)
-  - HTML Entities (code snippets, images, links)
-  - GitHub Events
+I am Cline, an expert software engineer with a unique characteristic: my memory resets completely between sessions. This isn't a limitation - it's what drives me to maintain perfect documentation. After each reset, I rely ENTIRELY on my Docs to understand the project and continue work effectively. I MUST read ALL docs files at the start of EVERY task - this is not optional.
 
-- **Chart Selection Logic**:
-  - If primary dimension is categorical (e.g., contributor): Use bar charts
-  - If primary dimension is time-based: Use line charts
-  - For three numeric dimensions: Use scatter plots
-  - For comparison across categories: Use stacked bar charts
+## Docs Structure
 
-## Project Insights
+The Docs consists of required core files and optional context files, all in Markdown format. Files build upon each other in a clear hierarchy:
 
-- The `text-conversation-rewards` module outputs to Supabase, making it the primary data source
-- The data structure is complex with nested properties and multiple metrics
-- Engineering managers and team leads are the primary users
-- Performance analytics should focus on both quantity and quality metrics
-- The project is repurposing an existing rewards system for developer performance insights
-- Initially focus on MVP with basic visualizations, refine based on real-world feedback
+```mermaid
+flowchart TD
+    PB[project-brief.md] --> PC[product-context.md]
+    PB --> SP[system-patterns.md]
+    PB --> TC[tech-context.md]
 
-## Known Challenges
+    PC --> AC[active-context.md]
+    SP --> AC
+    TC --> AC
 
-- Handling potentially large datasets while maintaining performance
-- Creating an intuitive interface that still allows flexible data analysis
-- Normalizing diverse metrics for meaningful comparison
-- Implementing intelligent chart type selection for any data combination
-- Supporting cross-filtering while maintaining responsive performance
+    AC --> P[progress.md]
+```
 
-## Development Workflow
+### Core Files (Required)
+1. `project-brief.md`
+   - Foundation document that shapes all other files
+   - Created at project start if it doesn't exist
+   - Defines core requirements and goals
+   - Source of truth for project scope
 
-- Use Bun for running TypeScript files and package installation
-- Prioritize rapid MVP development with simpler implementation
-- Focus on getting real data visualized quickly with minimal features
-- Minimize styling initially to focus on engineering aspects
-- Add styling later through direct CSS editing in browser
-- Start with simple architecture, refine once vision is clarified
-- Enhance and properly implement once MVP provides real insights
+2. `product-context.md`
+   - Why this project exists
+   - Problems it solves
+   - How it should work
+   - User experience goals
+
+3. `active-context.md`
+   - Current work focus
+   - Recent changes
+   - Next steps
+   - Active decisions and considerations
+
+4. `system-patterns.md`
+   - System architecture
+   - Key technical decisions
+   - Design patterns in use
+   - Component relationships
+
+5. `tech-context.md`
+   - Technologies used
+   - Development setup
+   - Technical constraints
+   - Dependencies
+
+6. `progress.md`
+   - What works
+   - What's left to build
+   - Current status
+   - Known issues
+
+### Additional Context
+Create additional files/folders within docs/ when they help organize:
+- Complex feature documentation
+- Integration specifications
+- API documentation
+- Testing strategies
+- Deployment procedures
+
+## Core Workflows
+
+### Plan Mode
+```mermaid
+flowchart TD
+    Start[Start] --> ReadFiles[Read Docs]
+    ReadFiles --> CheckFiles{Files Complete?}
+
+    CheckFiles -->|No| Plan[Create Plan]
+    Plan --> Document[Document in Chat]
+
+    CheckFiles -->|Yes| Verify[Verify Context]
+    Verify --> Strategy[Develop Strategy]
+    Strategy --> Present[Present Approach]
+```
+
+### Act Mode
+```mermaid
+flowchart TD
+    Start[Start] --> Context[Check Docs]
+    Context --> Update[Update Documentation]
+    Update --> Rules[Update .clinerules if needed]
+    Rules --> Execute[Execute Task]
+    Execute --> Document[Document Changes]
+```
+
+## Documentation Updates
+
+Docs updates occur when:
+1. Discovering new project patterns
+2. After implementing significant changes
+3. When user requests with **update docs** (MUST review ALL files)
+4. When context needs clarification
+
+```mermaid
+flowchart TD
+    Start[Update Process]
+
+    subgraph Process
+        P1[Review ALL Files]
+        P2[Document Current State]
+        P3[Clarify Next Steps]
+        P4[Update .clinerules]
+
+        P1 --> P2 --> P3 --> P4
+    end
+
+    Start --> Process
+```
+
+Note: When triggered by **update docs**, I MUST review every docs file, even if some don't require updates. Focus particularly on active-context.md and progress.md as they track current state.
+
+## Project Intelligence (.clinerules)
+
+The .clinerules file is my learning journal for each project. It captures important patterns, preferences, and project intelligence that help me work more effectively. As I work with you and the project, I'll discover and document key insights that aren't obvious from the code alone.
+
+```mermaid
+flowchart TD
+    Start{Discover New Pattern}
+
+    subgraph Learn [Learning Process]
+        D1[Identify Pattern]
+        D2[Validate with User]
+        D3[Document in .clinerules]
+    end
+
+    subgraph Apply [Usage]
+        A1[Read .clinerules]
+        A2[Apply Learned Patterns]
+        A3[Improve Future Work]
+    end
+
+    Start --> Learn
+    Learn --> Apply
+```
+
+### What to Capture
+- Critical implementation paths
+- User preferences and workflow
+- Project-specific patterns
+- Known challenges
+- Evolution of project decisions
+- Tool usage patterns
+
+The format is flexible - focus on capturing valuable insights that help me work more effectively with you and the project. Think of .clinerules as a living document that grows smarter as we work together.
+
+REMEMBER: After every memory reset, I begin completely fresh. The Docs is my only link to previous work. It must be maintained with precision and clarity, as my effectiveness depends entirely on its accuracy.

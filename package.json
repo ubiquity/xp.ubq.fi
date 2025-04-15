@@ -1,30 +1,32 @@
 {
-  "name": "xp.ubq.fi",
-  "module": "index.html",
-  "type": "module",
+  "name": "bun-esbuild-frontend",
+  "version": "0.1.0",
   "scripts": {
-    "start": "bun run src/server.ts",
-    "dev": "bun --hot run src/server.ts",
-    "build": "bun build src/index.tsx --outdir dist --target browser"
+    "build": "bun run tools/build.ts",
+    "type-check": "tsc --noEmit --watch",
+    "dev:server": "bun --hot run tools/server.ts",
+    "dev:frontend": "run-p watch type-check",
+    "dev:enhanced": "bun run tools/dev.ts",
+    "dev:start-server": "bun --watch run tools/server.ts",
+    "dev": "rm -rf dist && bun run tools/start-dev.ts",
+    "start": "bun run tools/server.ts",
+    "auto-commit": "bun run tools/auto-commit-watch.ts"
   },
   "devDependencies": {
-    "@types/bun": "latest"
-  },
-  "peerDependencies": {
-    "typescript": "^5.0.0"
+    "@types/bun": "^1.2.9",
+    "@types/glob": "^8.1.0",
+    "bun-types": "^1.2.9",
+    "esbuild": "^0.25.2",
+    "npm-run-all": "^4.1.5",
+    "typescript": "^5.8.3"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.49.4",
-    "@types/d3": "^7.4.3",
-    "@types/lodash": "^4.17.16",
-    "@types/react": "^19.1.0",
-    "@types/react-dom": "^19.1.2",
-    "d3": "^7.9.0",
-    "date-fns": "^4.1.0",
-    "lodash": "^4.17.21",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
-    "react-router-dom": "^7.5.0",
-    "recharts": "^2.15.2"
+    "@elysiajs/static": "^1.2.0",
+    "@zip.js/zip.js": "^2.7.60",
+    "chokidar": "^4.0.3",
+    "elysia": "^1.2.25",
+    "fflate": "^0.8.2",
+    "glob": "^11.0.1",
+    "jose": "^6.0.10"
   }
 }

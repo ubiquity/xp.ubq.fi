@@ -1,87 +1,55 @@
-# Developer Performance Analytics Dashboard
+# GitHub Artifacts Viewer
 
-A data visualization dashboard for analyzing developer performance metrics from the `text-conversation-rewards` module.
-
-## Overview
-
-This dashboard allows engineering managers and team leads to visualize and analyze developer contributions and activities through an intuitive interface. The system intelligently recommends appropriate visualization types based on the selected data dimensions.
+A minimal frontend application to download, unzip, and display GitHub artifacts directly in the browser using WASM.
 
 ## Features
 
-- Dynamic data visualization based on selected dimensions
-- Intelligent chart type recommendation system
-- Support for various data dimensions (comment quality, review statistics, contributor metrics, etc.)
-- Flexible visualization system
-
-## Prerequisites
-
-- Bun 1.0 or higher
-- Supabase account with properly configured database
-
-## Installation
-
-1. Clone the repository:
-   ```bash
-   git clone <repository-url>
-   cd xp.ubq.fi
-   ```
-
-2. Install dependencies:
-   ```bash
-   bun install
-   ```
-
-3. Create your environment file:
-   ```bash
-   cp .env.example .env
-   ```
-
-4. Configure your environment variables in `.env` with your Supabase credentials:
-   ```
-   SUPABASE_URL=your_supabase_url_here
-   SUPABASE_API_KEY=your_supabase_api_key_here
-   ```
+- Download GitHub artifacts directly in the browser
+- Process ZIP files using WebAssembly
+- Store and view results using IndexedDB
+- Minimal UI without frameworks
 
 ## Development
 
-Run the development server:
+This project uses Bun and TypeScript for development.
 
-```bash
-bun run dev
-```
+### Setup
 
-Open your browser to the URL shown in the terminal (typically http://localhost:3000).
+1. Clone the repository
+2. Install dependencies with `bun install`
+3. Copy `.env.example` to `.env` and fill in your GitHub details
 
-## Building for Production
+### Development Commands
 
-Build the application:
+- `bun run dev`: Start development environment with auto-restart (recommended)
+- `bun run build`: Build for production
+- `bun run start`: Start server without watching
 
-```bash
-bun run build
-```
+### Architecture
 
-The compiled files will be in the `dist` directory.
+- **Frontend**: Plain HTML, CSS, and TypeScript
+- **Backend**: Minimal Bun server in development, Deno Deploy for production
+- **WASM**: Rust-based ZIP processing for browser
 
-## Data Structure
+## Deployment
 
-The dashboard expects data from the `text-conversation-rewards` module to be stored in Supabase. The data structure includes:
+The project is designed to be deployed to Deno Deploy:
 
-- Issue/PR information
-- Comments with quality metrics
-- Review statistics
-- Contributor data
-- Events and timestamps
+1. Build the project: `bun run build`
+2. Push the `deno/artifact-proxy.ts` file to Deno Deploy
+3. Set the required environment variables in the Deno Deploy dashboard
 
-## Architecture
+## Environment Variables
 
-The application follows a modular architecture:
+- `GITHUB_TOKEN`: GitHub token with artifacts access
+- `ORG`: GitHub organization name
+- `REPO`: GitHub repository name
+- `DEBUG`: Set to "true" to enable verbose logging (optional)
 
-- **API Layer**: Connects to Supabase to fetch data
-- **Data Store**: Manages and transforms data
-- **Chart Configuration Engine**: Suggests appropriate visualizations
-- **Visualization Components**: Renders different chart types
-- **Dashboard UI**: Provides the user interface
+## Server Auto-Restart
 
-## License
+The development server will automatically restart when any server-related file changes, providing:
 
-[License information here]
+- Real-time feedback for server changes
+- Automatic browser refresh for frontend changes
+- Colorized logging for easier debugging
