@@ -57,18 +57,18 @@ select {
   align-items: center;
 }
 .xp-analytics-label {
-  font-size: 16px;
+  font-size: 12px;
   color: #ccc;
   min-width: 120px;
 }
 .xp-analytics-select {
-  font-size: 16px;
+  font-size: 12px;
   padding: 8px 16px;
   /* min-width: 160px; */
 }
 .xp-analytics-view-toggle {
   margin-left: 32px;
-  font-size: 16px;
+  font-size: 12px;
   padding: 8px 16px;
   border-radius: 4px;
   border: none;

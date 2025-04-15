@@ -121,7 +121,7 @@ async function init() {
           ranks: currentRanks, // Pass the recalculated ranks
           scaleMode: scaleMode,
         });
-        timeRangeText = ""; // No time range label for leaderboard
+        // timeRangeText = ""; // REMOVED: Will set label text after if/else block
 
       } else { // Time Series View
         // Filter time series data by contributor if not "All"
@@ -162,10 +162,22 @@ async function init() {
          } else {
             timeRangeText = ""; // Show nothing if time range isn't calculated yet
         }
-      }
-      // Update time range label
+      } // End of else for Time Series View
+
+      // --- Update time range label (now applies to both views) ---
       if (timeRangeLabel) {
-        timeRangeLabel.textContent = timeRangeText;
+          if (globalMinTimeMs !== null && globalMaxTimeMs !== null) {
+              const currentDisplayTimeMs = currentTimeValue * MS_PER_MINUTE;
+              const format = (d: Date) =>
+                `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+              const startTimeStr = format(new Date(globalMinTimeMs));
+              const currentTimeStr = format(new Date(currentDisplayTimeMs));
+              // Indicate the full range but highlight the current end point
+              timeRangeText = `${startTimeStr} — ${currentTimeStr}`;
+           } else {
+              timeRangeText = ""; // Show nothing if time range isn't calculated yet
+          }
+          timeRangeLabel.textContent = timeRangeText;
       }
       // Update toggle button label
       viewToggle.textContent = viewMode === "leaderboard" ? "Leaderboard" : "Time Series";
