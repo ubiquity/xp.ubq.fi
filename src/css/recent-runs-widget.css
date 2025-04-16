@@ -1,113 +1,27 @@
-.recent-runs-widget { /* Renamed */
-  /* Ensure the inner container fills the allocated space */
-  width: 100%;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  /* background: #1a1a1a; */ /* Keep background transparent */
-  color: #fff;
-  padding: 8px 0;
-  border-radius: 4px;
-  font-family: monospace;
-  font-size: 12px;
-  /* z-index: 9999; */
-  /* max-width: 400px; */
-  /* max-height: 600px; */
-  /* overflow-y: auto; */ /* Handled by parent .main-content now */
-  /* box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); */
-  /* border: 1px solid #333; */
-  top: 96px; /* This might be irrelevant now it's in flexbox */
-}
+.recent-runs-widget {width: 100%;height: 100%;display: flex;flex-direction: column;color: #fff;/* padding: 8px 0; */border-radius: 4px;font-family: monospace;font-size: 12px;margin-top: auto;}
+.recent-runs-widget > div:not(.recent-runs-widget__title) { flex: 1; overflow-y: auto; min-height: 0; }
+.recent-runs-widget__title { flex-shrink: 0; text-align: center; padding: 4px 8px; }
+.recent-runs-widget__error { color: #ff6b6b; }
+.workflow-run { margin: 8px 0; padding: 8px 12px; border-radius: 4px; cursor: pointer; transition: background 0.2s; }
+.workflow-run--active { background: #202020; }
+.workflow-run:hover { background: #2a2a2a; }
+.workflow-run__header { margin-bottom: 4px; display: flex; justify-content: space-between; align-items: center; }
+.workflow-run__id { color: #66d9e8; display: none; }
+.workflow-run__timestamp { color: #868e96; font-size: 12px; }
+.workflow-run__detail { color: #63e6be; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.recent-runs-widget__loading { text-align: center; color: #868e96; padding: 16px; display: flex; flex-direction: column; align-items: center; }
+.recent-runs-widget__spinner { width: 16px; height: 16px; border: 4px solid transparent; border-radius: 50%; border-top-color: #868e96; animation: spinner-rotate 0.8s linear infinite; margin: 0 auto 8px; }
+@keyframes spinner-rotate { 100% { transform: rotate(360deg); } }
 
-/* Ensure the direct child div holding the runs can scroll */
-.recent-runs-widget > div:not(.recent-runs-widget__title) {
-    flex: 1; /* Allow this container to grow */
-    overflow-y: auto; /* Enable vertical scrolling for runs */
-    min-height: 0; /* Prevent flex item from overflowing parent */
-}
-
-
-.recent-runs-widget__title { /* Renamed */
-  flex-shrink: 0; /* Prevent title from shrinking */
-  /* font-weight: bold; */
-  /* margin-bottom: 10px; */
-  /* padding-bottom: 5px; */
-  /* border-bottom: 1px solid #333; */
-  text-align: center;
-  padding: 4px 8px;
-}
-
-.recent-runs-widget__error { /* Renamed */
-  color: #ff6b6b;
-}
-
-/* Styles for individual run items remain the same */
-.workflow-run {
-  margin: 8px 0;
-  padding: 8px 12px;
-  border-radius: 4px;
-  /* background: #202020; */
-  cursor: pointer;
-  transition: background 0.2s;
-  /* backdrop-filter: blur(12px); */
-}
-
-.workflow-run--active {
-  background: #202020;
-  /* border-left: 2px solid var(--chart-color-good); */
-  /* padding-left: 10px; */
-  /* margin-left: -12px; */
-}
-
-.workflow-run:hover {
-  background: #2a2a2a;
-}
-
-.workflow-run__header {
-  margin-bottom: 4px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.workflow-run__id {
-  color: #66d9e8;
-  display: none;
-}
-
-.workflow-run__timestamp {
-  color: #868e96;
-  font-size: 12px;
-}
-
-.workflow-run__detail {
-  color: #63e6be;
-  font-size: 12px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* Loading spinner and states */
-.recent-runs-widget__loading {
-    text-align: center;
-    color: #868e96;
-    padding: 16px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-}
-
-.recent-runs-widget__spinner {
-    width: 16px;
-    height: 16px;
-    border: 4px solid transparent;
-    border-radius: 50%;
-    border-top-color: #868e96;
-    animation: spinner-rotate 0.8s linear infinite;
-    margin: 0 auto 8px;
-}
-
-@keyframes spinner-rotate {
-    100% { transform: rotate(360deg); }
-}
+@media (orientation: portrait) {
+    .main-content {
+      flex-direction: column;
+    }
+    .main-content > recent-runs-widget { /* Updated tag name */
+      flex: 0 0 auto; /* Allow height to adjust to content */
+      margin-top: auto;
+      border-left: none;
+      padding-left: 0;
+      border-top: 1px solid #222;
+    }
+  }
