@@ -67,10 +67,24 @@ try {
     sourcemap: true,
   });
 
-  log("BUILD", "Initial build complete", colors.green);
+  log("BUILD", "Initial main build complete", colors.green);
 
-  // Start watcher
-  const ctx = await esbuild.context({
+  // Build worker initially
+  await esbuild.build({
+    entryPoints: ["src/workers/artifact-processor.ts"],
+    outfile: "dist/artifact-processor.js",
+    bundle: true,
+    format: "esm",
+    platform: "browser", // Worker runs in browser-like environment
+    target: "esnext",
+    sourcemap: true,
+    // Add define if needed, matching build.ts
+    // define: { ... }
+  });
+  log("BUILD", "Initial worker build complete", colors.green);
+
+  // Start watcher for main bundle
+  const mainCtx = await esbuild.context({
     entryPoints: ["src/main.ts"],
     outfile: "dist/bundle.js",
     bundle: true,
@@ -81,8 +95,24 @@ try {
     logLevel: "info",
   });
 
-  ctx.watch();
-  log("WATCH", "Frontend file watcher started", colors.blue);
+  mainCtx.watch();
+  log("WATCH", "Main bundle watcher started", colors.blue);
+
+  // Start watcher for worker bundle
+  const workerCtx = await esbuild.context({
+    entryPoints: ["src/workers/artifact-processor.ts"],
+    outfile: "dist/artifact-processor.js",
+    bundle: true,
+    format: "esm",
+    platform: "browser",
+    target: "esnext",
+    sourcemap: true,
+    // define: { ... } // Add define if needed
+    logLevel: "info", // Log worker rebuilds
+  });
+
+  workerCtx.watch();
+  log("WATCH", "Worker bundle watcher started", colors.blue);
 
   // Start server watcher for auto-restart
   watcherProcess = exec("bun run tools/watch-server-changes.ts");

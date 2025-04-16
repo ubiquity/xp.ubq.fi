@@ -143,12 +143,22 @@ export class RecentRunsWidget extends HTMLElement {
     }
 
     for (const run of runsToRender) {
-      const runElement = document.createElement("div");
-      const urlParams = new URLSearchParams(window.location.search);
-      const currentRunId = urlParams.get('run');
-      const isActiveRun = currentRunId === String(run.id);
+      try {
+        // Check if the required artifact exists before rendering the run
+        const artifacts = await fetchArtifactsList(String(run.id));
+        const hasRequiredArtifact = artifacts.some(a => a.name === 'final-aggregated-results');
 
-      runElement.className = `workflow-run${isActiveRun ? ' workflow-run--active' : ''}`;
+        if (!hasRequiredArtifact) {
+          console.log(`Skipping run ${run.id}: Missing required artifact`);
+          continue; // Skip this run if it doesn't have the required artifact
+        }
+
+        const runElement = document.createElement("div");
+        const urlParams = new URLSearchParams(window.location.search);
+        const currentRunId = urlParams.get('run');
+        const isActiveRun = currentRunId === String(run.id);
+
+        runElement.className = `workflow-run${isActiveRun ? ' workflow-run--active' : ''}`;
 
       const timestamp = new Date(run.created_at).toLocaleString(undefined, {
         month: 'short',
@@ -264,6 +274,11 @@ export class RecentRunsWidget extends HTMLElement {
       });
 
       this.runsContainer.appendChild(runElement);
+      } catch (error) {
+        console.error(`Error rendering run ${run.id}:`, error);
+        // Skip this run if we encounter any errors
+        continue;
+      }
     }
   }
 }
