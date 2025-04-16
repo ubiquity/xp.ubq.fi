@@ -2,7 +2,7 @@ import { strFromU8, unzipSync } from 'fflate';
 
 // Define valid zip file signature (PK\x03\x04)
 const ZIP_SIGNATURE = new Uint8Array([0x50, 0x4b, 0x03, 0x04]);
-const AGGREGATED_JSON_FILENAME = "aggregated_results.json";
+const POSSIBLE_INPUT_FILENAMES = ["workflow-inputs.json", "input.json", "inputs.json"];
 
 /**
  * Validate zip file signature
@@ -31,17 +31,27 @@ export async function unzipArtifact(zipData: Uint8Array): Promise<unknown[]> {
     const unzipped = unzipSync(zipData);
     console.log("Unzipped files:", Object.keys(unzipped)); // Log filenames
 
-    // Look for exact match only
-    const aggregatedData = unzipped[AGGREGATED_JSON_FILENAME];
-    if (!aggregatedData) {
-      throw new Error(`${AGGREGATED_JSON_FILENAME} not found in ZIP archive. Files found: ${Object.keys(unzipped).join(', ')}`);
+    // Look for any of the possible input files
+    let inputData: Uint8Array | undefined;
+    let foundFilename: string | undefined;
+
+    for (const filename of POSSIBLE_INPUT_FILENAMES) {
+      inputData = unzipped[filename];
+      if (inputData) {
+        foundFilename = filename;
+        break;
+      }
     }
 
-    console.log(`Found ${AGGREGATED_JSON_FILENAME}, size: ${aggregatedData.length}`);
+    if (!inputData || !foundFilename) {
+      throw new Error(`No input file found in ZIP archive. Files found: ${Object.keys(unzipped).join(', ')}`);
+    }
+
+    console.log(`Found ${foundFilename}, size: ${inputData.length}`);
 
     // Decode the Uint8Array to a string
     console.log("Decoding Uint8Array to string...");
-    const jsonString = strFromU8(aggregatedData);
+    const jsonString = strFromU8(inputData);
     console.log(`Decoded string length: ${jsonString.length}`);
 
     // Parse the JSON string
@@ -49,11 +59,8 @@ export async function unzipArtifact(zipData: Uint8Array): Promise<unknown[]> {
     const parsedJson = JSON.parse(jsonString);
     console.log("JSON parsing complete.");
 
-    if (!Array.isArray(parsedJson)) {
-      throw new Error("Expected aggregated_results.json to contain an array");
-    }
-
-    return parsedJson;
+    // Input data could be either an object or an array
+    return Array.isArray(parsedJson) ? parsedJson : [parsedJson];
 
   } catch (error: unknown) {
     console.error("Error during unzipping or parsing:", error);

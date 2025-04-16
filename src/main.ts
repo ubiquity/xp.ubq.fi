@@ -508,7 +508,7 @@ async function init() {
       // Display a placeholder message in the chart area.
       if (chartArea) {
         // Ensure the dev-mode-message class exists or define styles for it
-        chartArea.innerHTML = `<div class="dev-mode-message" style="display: flex; align-items: center; justify-content: center; height: 100%; color: #ccc;"><div><p>Select a report from the sidebar.</p></div></div>`;
+        chartArea.innerHTML = `<div class="dev-mode-message" style="display: flex; align-items: center; justify-content: center; height: 100%; color: #ccc;"><div><p>Select a report.</p></div></div>`;
       }
       // Hide elements that depend on run data
       if (contributorSelect) contributorSelect.style.display = 'none';

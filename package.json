@@ -8,7 +8,7 @@
     "dev:frontend": "run-p watch type-check",
     "dev:enhanced": "bun run tools/dev.ts",
     "dev:start-server": "bun --watch run tools/server.ts",
-    "dev": "rm -rf dist && bun run tools/start-dev.ts",
+    "dev": "bun run tools/dev.ts",
     "start": "bun run tools/server.ts",
     "auto-commit": "bun run tools/auto-commit-watch.ts"
   },
