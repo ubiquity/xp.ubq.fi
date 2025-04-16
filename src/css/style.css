@@ -137,8 +137,8 @@ button {
   display: flex;
   flex: 1; /* Allow this container to grow and fill space */
   overflow: hidden; /* Prevent content overflow */
-  gap: 16px; /* Add gap between chart and sidebar */
-  padding: 0 16px 16px 16px; /* Add padding around main content, except top */
+  /* gap: 16px; */ /* Add gap between chart and sidebar */
+  /* padding: 0 16px 16px 16px; */ /* Add padding around main content, except top */
   box-sizing: border-box;
 }
 

@@ -111,13 +111,8 @@ export class RecentRunsWidget extends HTMLElement {
   }
 
   private async renderWorkflowRuns(runs: WorkflowRun[]) {
-    const itemHeight = 68;
-    let numToDisplay = 10;
-
-    if (this.offsetHeight > 0) {
-      const availableHeight = this.offsetHeight - 40;
-      numToDisplay = Math.max(1, Math.floor(availableHeight / itemHeight));
-    }
+    // Removed itemHeight and height-based calculation for numToDisplay
+    const numToDisplay = 10; // Always aim to render up to 10 runs
 
     this.runsContainer.innerHTML = "";
 
