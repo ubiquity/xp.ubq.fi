@@ -4,11 +4,13 @@ import type { OverviewResult } from "./analytics/contribution-overview"; // Impo
 import type { QualityResult } from "./analytics/comment-quality"; // Import new type
 import type { ReviewMetricsResult } from "./analytics/review-metrics"; // Import new type
 import { cubicBezier, getRunIdFromQuery, isProduction } from "./utils";
+import { exportDataToCsv } from "./utils/export-csv"; // Import the export function
 import { renderLeaderboardChart } from "./visualization/leaderboard-chart";
 import { renderTimeSeriesChart } from "./visualization/time-series-chart";
 import { InsightsView } from "./components/insights-view"; // Import the new component
 import { cleanupWorker, loadArtifactData } from "./workers/artifact-worker-manager";
 import { calculateContributorXpAtTime } from "./calculate-contributor-xp-at-time"; // Import the new helper
+import type { OrgRepoStructure } from "./data-transform"; // Import OrgRepoStructure type
 
 type ViewMode = "leaderboard" | "timeseries" | "insights"; // Add insights view mode
 
@@ -47,6 +49,7 @@ async function init() {
     let overviewData: OverviewResult = {}; // State for overview
     let qualityData: QualityResult = {}; // State for quality
     let reviewData: ReviewMetricsResult = {}; // State for reviews
+    let currentRawData: OrgRepoStructure | null = null; // State for raw data for export
     let viewMode: ViewMode = "leaderboard"; // Default view
     let selectedContributor: string = "All";
     let currentTimeValue: number = 0; // Current slider value (minutes since epoch)
@@ -68,6 +71,13 @@ async function init() {
     const viewToggle = document.getElementById("view-toggle") as HTMLButtonElement; // Consolidated toggle
     // const insightsToggle = document.getElementById("insights-toggle") as HTMLButtonElement; // Removed redundant toggle
     const scaleToggle = document.getElementById("scale-toggle") as HTMLButtonElement; // Get scale toggle button
+    const exportCsvButton = document.createElement("button"); // Create export button
+    exportCsvButton.id = "export-csv-button";
+    exportCsvButton.textContent = "Export CSV";
+    exportCsvButton.disabled = true; // Disable initially
+    // Append near scale toggle (assuming they share a parent or are in a controls container)
+    scaleToggle.parentNode?.insertBefore(exportCsvButton, scaleToggle.nextSibling);
+
     const issueFilterInput = document.getElementById("issue-filter-input") as HTMLInputElement; // Get issue filter input
     const timeRange = document.getElementById("time-range") as HTMLInputElement;
     const contextLabel = document.getElementById("xp-analytics-context-label") as HTMLSpanElement;
@@ -382,6 +392,16 @@ async function init() {
 
     // Removed event listener for insightsToggle
 
+    exportCsvButton.addEventListener("click", () => {
+      if (currentRawData && runId) {
+        console.log("Exporting data for runId:", runId);
+        exportDataToCsv(runId, currentRawData);
+      } else {
+        console.warn("No data loaded or runId missing, cannot export.");
+        alert("No data loaded to export.");
+      }
+    });
+
     scaleToggle.addEventListener("click", () => {
         scaleMode = scaleMode === 'linear' ? 'log' : 'linear';
         scaleToggle.textContent = scaleMode === 'linear' ? "Use Log Scale" : "Use Linear Scale";
@@ -430,6 +450,15 @@ async function init() {
           overviewData = data.overview;
           qualityData = data.quality;
           reviewData = data.reviews;
+          // Store the raw data structure for export
+          if (data.rawData && runId && data.rawData[runId]) {
+            currentRawData = data.rawData[runId];
+            exportCsvButton.disabled = false; // Enable export button
+          } else {
+            currentRawData = null;
+            exportCsvButton.disabled = true; // Keep disabled if data structure is unexpected
+            console.warn("Raw data structure for the current runId is missing or invalid.");
+          }
 
           // Expose all data for debugging
           (window as any).analyticsData = {
@@ -515,6 +544,7 @@ async function init() {
       if (viewToggle) viewToggle.style.display = 'none';
       // insightsToggle is removed
       if (scaleToggle) scaleToggle.style.display = 'none';
+      if (exportCsvButton) exportCsvButton.style.display = 'none'; // Hide export button
       if (issueFilterInput?.parentElement) issueFilterInput.parentElement.style.display = 'none'; // Hide filter group
       if (timeRange?.parentElement) timeRange.parentElement.style.display = 'none'; // Hide slider container
       if (contextLabel) contextLabel.textContent = 'No Report Selected';
