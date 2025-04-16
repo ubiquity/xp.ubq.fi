@@ -1,4 +1,4 @@
-.recent-runs-widget {width: 100%;height: 100%;display: flex;flex-direction: column;color: #fff;/* padding: 8px 0; */border-radius: 4px;font-family: monospace;font-size: 12px;margin-top: auto;/* align-items: center; *//* table-layout: auto; *//* align-content: center; */justify-content: center;}
+.recent-runs-widget {width: 100%;height: 100%;display: flex;flex-direction: column;color: #fff;/* padding: 8px 0; */border-radius: 4px;font-family: monospace;font-size: 12px;margin-top: auto;/* align-items: center; *//* table-layout: auto; *//* align-content: center; *//* justify-content: center; */}
 .recent-runs-widget > div:not(.recent-runs-widget__title) {/* flex: 1; */overflow-y: auto;/* min-height: 0; */}
 .recent-runs-widget__title {flex-shrink: 0;text-align: center;padding: 4px 8px;}
 .recent-runs-widget__error { color: #ff6b6b; }
@@ -17,32 +17,42 @@
     .main-content {
       flex-direction: column;
     }
-    .main-content > recent-runs-widget { /* Target the widget itself */
-      flex: 0 0 auto; /* Don't grow or shrink vertically */
-      height: 108px; /* Fixed height: Title (~40px) + Item (68px) */
+    .main-content > recent-runs-widget {
+      flex: 0 0 auto;
+      height: 108px;
       margin-top: auto;
       border-left: none;
       padding-left: 0;
       border-top: 1px solid #222;
-      overflow: hidden; /* Hide anything extending beyond fixed height */
+      overflow: hidden;
     }
-    .recent-runs-widget > div:not(.recent-runs-widget__title) { /* Target the runs container */
+    .recent-runs-widget > div:not(.recent-runs-widget__title) {
       display: flex;
-      /* flex-direction: row; */ /* Lay out items horizontally */
-      /* overflow-x: auto; */ /* Enable horizontal scrolling */
-      /* overflow-y: hidden; */ /* Disable vertical scrolling */
-      /* flex-wrap: nowrap; */ /* Prevent wrapping */
-      /* padding: 8px 0; */ /* Add some vertical padding */
-      /* Override base styles */
-      /* min-height: auto; */
-      /* flex: 1; */ /* Allow it to fill the widget's height */
+      flex-direction: row;
+      overflow-x: auto;
+      overflow-y: hidden;
+      flex-wrap: nowrap;
+      padding: 8px 0;
+      min-height: auto;
+      flex: 1;
     }
-    .recent-runs-widget .workflow-run { /* Target individual run items */
-      /* flex-shrink: 0; */ /* Prevent items from shrinking */
-      width: 180px; /* Give items a fixed width */
-      /* margin: 0 4px; */ /* Remove vertical margin, add horizontal */
-      /* Ensure vertical padding is still applied if needed */
-      /* padding: 8px 12px; */
-      /* align-items: center; */
+    .recent-runs-widget .workflow-run {
+      flex-shrink: 0;
+      width: 180px;
+      margin: 0 4px;
+      padding: 8px 12px;
+    }
+  }
+
+@media (orientation: landscape) {
+    .recent-runs-widget > div:not(.recent-runs-widget__title) {
+      overflow-y: auto;
+      overflow-x: hidden;
+      min-height: 0;
+      flex: 1;
+    }
+    .recent-runs-widget .workflow-run {
+      width: auto;
+      margin: 8px 0;
     }
   }

@@ -30,9 +30,16 @@ export class RecentRunsWidget extends HTMLElement {
   private container!: HTMLDivElement;
   private runsContainer!: HTMLDivElement;
   private currentRunId: string | null = null;
+  private visibleRuns: WorkflowRun[] = [];
+  private allRuns: WorkflowRun[] = [];
+  private currentBatchSize = 0;
+  private isPortrait = false;
+  private isLoadingMore = false;
+  private resizeObserver: ResizeObserver;
 
   constructor() {
     super();
+    console.log('RecentRunsWidget version: 2025-04-16-21:48');
 
     this.container = document.createElement("div");
     this.container.className = "recent-runs-widget";
@@ -46,11 +53,21 @@ export class RecentRunsWidget extends HTMLElement {
     title.className = "recent-runs-widget__title";
     this.container.insertBefore(title, this.runsContainer);
 
+    // Initialize ResizeObserver
+    this.resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        this.handleResize(entry.contentRect);
+      }
+    });
+
     this.loadWorkflowRuns();
   }
 
   connectedCallback() {
     this.appendChild(this.container);
+    this.resizeObserver.observe(this.runsContainer);
+    this.checkOrientation();
+    this.setupScrollHandlers();
   }
 
   disconnectedCallback() {
@@ -110,37 +127,105 @@ export class RecentRunsWidget extends HTMLElement {
     }
   }
 
-  private async renderWorkflowRuns(runs: WorkflowRun[]) {
-    // Removed itemHeight and height-based calculation for numToDisplay
-    const numToDisplay = 10; // Always aim to render up to 10 runs
+  private handleResize(rect: DOMRectReadOnly) {
+    this.isPortrait = rect.width < rect.height;
+    this.updateScrollBehavior();
+  }
 
-    this.runsContainer.innerHTML = "";
+  private checkOrientation() {
+    const rect = this.runsContainer.getBoundingClientRect();
+    this.isPortrait = rect.width < rect.height;
+    this.updateScrollBehavior();
+  }
 
-    const uniqueRuns = runs.reduce<WorkflowRun[]>((acc, run) => {
-      if (!acc.find(r => r.id === run.id)) {
-        acc.push(run);
-      }
-      return acc;
-    }, []);
+  private calculateVisibleItems(): number {
+    if (!this.runsContainer.firstChild) return 5;
 
-    const runsToRender = uniqueRuns.slice(0, numToDisplay);
+    const containerHeight = this.runsContainer.clientHeight;
+    const firstRun = this.runsContainer.firstChild as HTMLElement;
+    const runHeight = firstRun.offsetHeight;
 
-    if (!runsToRender.length) {
-      this.runsContainer.innerHTML = '<div class="recent-runs-widget__error">No workflow runs found</div>';
-      return;
+    return Math.max(5, Math.ceil(containerHeight / runHeight));
+  }
+
+  private updateScrollBehavior() {
+    if (this.isPortrait) {
+      this.runsContainer.style.overflowX = 'auto';
+      this.runsContainer.style.overflowY = 'hidden';
+    } else {
+      this.runsContainer.style.overflowY = 'auto';
+      this.runsContainer.style.overflowX = 'hidden';
     }
+  }
 
-    for (const run of runsToRender) {
-      // Removed the check for 'final-aggregated-results' artifact existence here.
-      // This check should happen during the background sync process before caching.
-      // Assume if a run is in the cache, it's valid to display.
-      try {
-        const runElement = document.createElement("div");
-        const urlParams = new URLSearchParams(window.location.search);
-        const currentRunId = urlParams.get('run');
-        const isActiveRun = currentRunId === String(run.id);
+  private setupScrollHandlers() {
+    this.runsContainer.addEventListener('scroll', () => {
+      if (this.isLoadingMore) return;
 
-        runElement.className = `workflow-run${isActiveRun ? ' workflow-run--active' : ''}`;
+      if (this.isPortrait) {
+        // Check if scrolled near right edge
+        const scrollLeft = this.runsContainer.scrollLeft;
+        const scrollWidth = this.runsContainer.scrollWidth;
+        const clientWidth = this.runsContainer.clientWidth;
+
+        if (scrollLeft + clientWidth >= scrollWidth - 100) {
+          this.loadMoreRuns();
+        }
+      } else {
+        // Check if scrolled near bottom
+        const scrollTop = this.runsContainer.scrollTop;
+        const scrollHeight = this.runsContainer.scrollHeight;
+        const clientHeight = this.runsContainer.clientHeight;
+
+        if (scrollTop + clientHeight >= scrollHeight - 100) {
+          this.loadMoreRuns();
+        }
+      }
+    });
+  }
+
+  private async loadMoreRuns() {
+    if (this.visibleRuns.length >= this.allRuns.length) return;
+
+    this.isLoadingMore = true;
+
+    try {
+      // Show loading indicator
+      const loader = document.createElement('div');
+      loader.className = 'recent-runs-widget__loading';
+      loader.innerHTML = '<div class="recent-runs-widget__spinner"></div>';
+      this.runsContainer.appendChild(loader);
+
+      // Load next batch
+      const nextBatchSize = this.isPortrait ? 5 : this.calculateVisibleItems();
+      const nextBatch = this.allRuns.slice(
+        this.visibleRuns.length,
+        this.visibleRuns.length + nextBatchSize
+      );
+
+      // Remove loader
+      this.runsContainer.removeChild(loader);
+
+      // Render new runs
+      for (const run of nextBatch) {
+        await this.renderRun(run);
+      }
+
+      this.visibleRuns = [...this.visibleRuns, ...nextBatch];
+      this.currentBatchSize += nextBatchSize;
+    } finally {
+      this.isLoadingMore = false;
+    }
+  }
+
+  private async renderRun(run: WorkflowRun): Promise<void> {
+    try {
+      const runElement = document.createElement("div");
+      const urlParams = new URLSearchParams(window.location.search);
+      const currentRunId = urlParams.get('run');
+      const isActiveRun = currentRunId === String(run.id);
+
+      runElement.className = `workflow-run${isActiveRun ? ' workflow-run--active' : ''}`;
 
       const timestamp = new Date(run.created_at).toLocaleString(undefined, {
         month: 'short',
@@ -154,24 +239,15 @@ export class RecentRunsWidget extends HTMLElement {
       let statusColor = '#63e6be';
       let runDetail = "";
 
-      // --- Read inputs ONLY from cache ---
       const inputs = await getWorkflowInputs(String(run.id));
-      // console.log(`[Run ${run.id}] Read inputs from cache:`, JSON.stringify(inputs)); // DEBUG
-
-      // --- Determine display details based on cached inputs ---
       let organizations: string[] = [];
-      // console.log(`[Run ${run.id}] Final inputs object for display:`, JSON.stringify(inputs)); // DEBUG
       if (inputs?.organization) {
         organizations = Array.isArray(inputs.organization)
           ? inputs.organization.map((o: string) => o.trim())
-          : [String(inputs.organization).trim()]; // Ensure it's treated as a string array
-        // console.log(`[Run ${run.id}] Found organizations for display:`, organizations); // DEBUG
+          : [String(inputs.organization).trim()];
       }
 
       const repo = inputs?.repository || inputs?.repo;
-      // console.log(`[Run ${run.id}] Found repo for display:`, repo); // DEBUG
-
-      // If we have multiple orgs, join them with commas
       const displayOrgs = organizations.join(", ");
 
       if (displayOrgs && repo) {
@@ -179,13 +255,11 @@ export class RecentRunsWidget extends HTMLElement {
       } else if (displayOrgs) {
         runDetail = displayOrgs;
       } else if (inputs === undefined || inputs === null) {
-        // If inputs are not yet cached, show a placeholder
         runDetail = "Loading details...";
-        statusColor = "#fab005"; // Use a neutral/warning color
+        statusColor = "#fab005";
       } else {
-        // Inputs are cached but don't contain org/repo
         runDetail = "⚠ Unknown Report";
-        statusColor = "#ff6b6b"; // Error color
+        statusColor = "#ff6b6b";
       }
 
       runElement.innerHTML = `
@@ -202,12 +276,42 @@ export class RecentRunsWidget extends HTMLElement {
       });
 
       this.runsContainer.appendChild(runElement);
-      } catch (error) {
-        console.error(`Error rendering run ${run.id}:`, error);
-        // Skip this run if we encounter any errors
-        continue;
-      }
+    } catch (error) {
+      console.error(`Error rendering run ${run.id}:`, error);
     }
+  }
+
+  private async renderWorkflowRuns(runs: WorkflowRun[]) {
+    console.log('Original runs count:', runs.length);
+
+    this.allRuns = runs.reduce<WorkflowRun[]>((acc, run) => {
+      if (!acc.find(r => r.id === run.id)) {
+        acc.push(run);
+      }
+      return acc;
+    }, []);
+
+    console.log('Unique runs count:', this.allRuns.length);
+    console.log('Current orientation:', this.isPortrait ? 'portrait' : 'landscape');
+
+    // Always load all available runs
+    this.currentBatchSize = this.allRuns.length;
+    this.visibleRuns = this.allRuns.slice(0, this.currentBatchSize);
+
+    console.log('Will display runs:', this.visibleRuns.length);
+
+    this.runsContainer.innerHTML = "";
+
+    if (!this.visibleRuns.length) {
+      this.runsContainer.innerHTML = '<div class="recent-runs-widget__error">No workflow runs found</div>';
+      return;
+    }
+
+    for (const run of this.visibleRuns) {
+      await this.renderRun(run);
+    }
+
+    console.log('Finished rendering runs');
   }
 }
 
