@@ -7,7 +7,27 @@ import {
   setRecentRuns,
   setWorkflowInputs,
 } from "../db/recent-runs-cache";
-import { isProduction } from "../utils";
+import { fetchArtifactsList } from "../fetch-artifacts-list";
+import { downloadArtifactZip } from "../download-artifact";
+import { unzipArtifact } from "../unzip-artifact";
+import type { Artifact } from "../types";
+
+interface WorkflowRun {
+  id: number;
+  created_at: string;
+  head_repository?: {
+    owner: {
+      login: string;
+    };
+    name: string;
+  };
+  repository?: {
+    owner: {
+      login: string;
+    };
+    name: string;
+  };
+}
 
 export class RecentRunsWidget extends HTMLElement {
   private container!: HTMLDivElement;
@@ -16,11 +36,9 @@ export class RecentRunsWidget extends HTMLElement {
 
   constructor() {
     super();
-    // Removed isProduction check as it's always shown now
-    // if (isProduction()) return;
 
     this.container = document.createElement("div");
-    this.container.className = "recent-runs-widget"; // Updated class name
+    this.container.className = "recent-runs-widget";
 
     this.runsContainer = document.createElement("div");
     this.container.appendChild(this.runsContainer);
@@ -28,64 +46,67 @@ export class RecentRunsWidget extends HTMLElement {
     // Add title
     const title = document.createElement("div");
     title.textContent = "Recent Reports";
-    title.className = "recent-runs-widget__title"; // Updated class name
+    title.className = "recent-runs-widget__title";
     this.container.insertBefore(title, this.runsContainer);
 
     this.loadWorkflowRuns();
   }
 
   connectedCallback() {
-    // Removed isProduction check
     this.appendChild(this.container);
   }
 
   disconnectedCallback() {
-    // Removed isProduction check
     if (this.container.parentNode) {
       this.container.parentNode.removeChild(this.container);
     }
   }
 
   private async loadWorkflowRuns() {
-    // Show spinner immediately
-    this.runsContainer.innerHTML = `
-      <div class="recent-runs-widget__loading">
-        <div class="recent-runs-widget__spinner"></div>
-        <div>Loading recent reports...</div>
-      </div>
-    `;
+    console.log('Starting loadWorkflowRuns...');
+    let hasRenderedCache = false;
 
-    // 1. Try to load from cache first
     try {
+      // 1. Load cached data immediately
       const cachedRuns = await getRecentRuns();
       if (cachedRuns && Array.isArray(cachedRuns)) {
-        this.renderWorkflowRuns(cachedRuns, true);
-        // Update loading text while fetching fresh data
-        const loadingDiv = this.runsContainer.querySelector('.recent-runs-widget__loading');
-        if (loadingDiv) {
-          loadingDiv.innerHTML = `
-            <div class="recent-runs-widget__spinner"></div>
-            <div>Updating reports...</div>
-          `;
-        }
+        console.log('Rendering cached runs');
+        this.renderWorkflowRuns(cachedRuns);
+        hasRenderedCache = true;
       }
-    } catch (e) {
-      console.error("Error loading cached workflow runs:", e);
-    }
 
-    // 2. Fetch fresh data from API
-    try {
+      // Show loading only if we don't have cache
+      if (!hasRenderedCache) {
+        this.runsContainer.innerHTML = `
+          <div class="recent-runs-widget__loading">
+            <div class="recent-runs-widget__spinner"></div>
+            <div>Loading reports...</div>
+          </div>
+        `;
+      }
+
+      // 2. Fetch fresh data from API in background
+      console.log('Fetching fresh workflow runs...');
       const response = await fetch("/api/workflow-runs");
-      if (!response.ok) throw new Error("Failed to fetch workflow runs");
+      if (!response.ok) throw new Error(`API error: ${response.status}`);
       const data = await response.json();
-      if (Array.isArray(data.workflow_runs)) {
+
+      if (!Array.isArray(data.workflow_runs)) {
+        throw new Error('Invalid API response format');
+      }
+
+      // Find any new runs that we don't have cached
+      const existingRunIds = new Set((cachedRuns || []).map(r => r.id));
+      const newRuns = data.workflow_runs.filter((run: WorkflowRun) => !existingRunIds.has(run.id));
+
+      // Only update cache and re-render if we have new runs
+      if (newRuns.length > 0) {
         await setRecentRuns(data.workflow_runs);
-        // Re-render with fresh data
-        this.renderWorkflowRuns(data.workflow_runs, false);
+        this.renderWorkflowRuns(data.workflow_runs);
       }
     } catch (error) {
-      console.error("Error fetching workflow runs from API:", error);
-      // Show error state if both cache and API fail
+      console.error("Error in loadWorkflowRuns:", error);
+      // Show error only if we have no data at all
       if (!this.runsContainer.querySelector('.workflow-run')) {
         this.runsContainer.innerHTML = `
           <div class="recent-runs-widget__error">
@@ -96,39 +117,33 @@ export class RecentRunsWidget extends HTMLElement {
     }
   }
 
-  // isCacheOnly: true if rendering from cache, false if rendering from fresh API (should only be true in this widget)
-  private async renderWorkflowRuns(runs: any[], isCacheOnly = false) {
-    // --- Dynamic Item Calculation ---
-    const itemHeight = 68; // Estimated height (padding + margin + text) in pixels
-    let numToDisplay = 10; // Default fallback
+  private async renderWorkflowRuns(runs: WorkflowRun[]) {
+    const itemHeight = 68;
+    let numToDisplay = 10;
 
-    // Ensure container is in the DOM and has height before calculating
-    // Use `this.offsetHeight` as the container might not be fully rendered yet
     if (this.offsetHeight > 0) {
-        const availableHeight = this.offsetHeight - 40; // Subtract approx title height + padding
-        numToDisplay = Math.max(1, Math.floor(availableHeight / itemHeight));
-        // console.log(`RecentRunsWidget: Height=${availableHeight}, ItemHeight=${itemHeight}, Displaying=${numToDisplay}`); // Optional debug log
-    } else {
-        // If container height isn't available yet (e.g., initial render before layout),
-        // maybe try getting height from `this` (the custom element) or defer calculation slightly.
-        // For now, we'll stick to the default if container height is 0.
-        // console.log(`RecentRunsWidget: Container height 0, using default ${numToDisplay}`);
+      const availableHeight = this.offsetHeight - 40;
+      numToDisplay = Math.max(1, Math.floor(availableHeight / itemHeight));
     }
-    // --- End Calculation ---
 
     this.runsContainer.innerHTML = "";
 
-    const runsToRender = runs.slice(0, numToDisplay); // Slice the array
+    const uniqueRuns = runs.reduce<WorkflowRun[]>((acc, run) => {
+      if (!acc.find(r => r.id === run.id)) {
+        acc.push(run);
+      }
+      return acc;
+    }, []);
+
+    const runsToRender = uniqueRuns.slice(0, numToDisplay);
 
     if (!runsToRender.length) {
-      this.runsContainer.innerHTML = '<div class="recent-runs-widget__error">No workflow runs found</div>'; // Updated class name
+      this.runsContainer.innerHTML = '<div class="recent-runs-widget__error">No workflow runs found</div>';
       return;
     }
 
-    // Render only the calculated number of runs
     for (const run of runsToRender) {
       const runElement = document.createElement("div");
-      // Get current run ID from URL
       const urlParams = new URLSearchParams(window.location.search);
       const currentRunId = urlParams.get('run');
       const isActiveRun = currentRunId === String(run.id);
@@ -143,39 +158,53 @@ export class RecentRunsWidget extends HTMLElement {
         second: '2-digit',
         hour12: false
       });
-      let statusColor = "#63e6be"; // Default green
+
+      let statusColor = '#63e6be';
       let runDetail = "";
 
-      // Try to get workflow inputs from cache first
-      let inputs: any = undefined;
-      try {
-        inputs = await getWorkflowInputs(String(run.id));
-        if (typeof inputs === "undefined") {
-          // Not in cache, fetch from API and cache for next load
-          const res = await fetch(`/api/workflow-inputs/${run.id}`);
-          if (res.ok) {
-            inputs = await res.json();
+      let inputs: Record<string, any> | null = null;
+      const cachedInputs = await getWorkflowInputs(String(run.id));
+
+      if (cachedInputs === undefined) {
+        try {
+          console.log(`Fetching artifacts for run ${run.id}...`);
+          const artifacts = await fetchArtifactsList(String(run.id));
+          const inputsArtifact = artifacts.find((a: Artifact) =>
+            a.name.startsWith('workflow-inputs-') ||
+            a.name === 'workflow-inputs' ||
+            a.name === 'input' ||
+            a.name === 'workflow_inputs'
+          );
+
+          if (inputsArtifact) {
+            const zipData = await downloadArtifactZip(inputsArtifact, String(run.id));
+            const unzippedData = await unzipArtifact(zipData) as Record<string, any> | Record<string, any>[];
+            const processedInputs = Array.isArray(unzippedData) ? unzippedData[0] : unzippedData;
+            inputs = processedInputs as Record<string, any>;
             await setWorkflowInputs(String(run.id), inputs);
           } else {
-            // Cache null to avoid repeated fetches for missing inputs
             await setWorkflowInputs(String(run.id), null);
-            inputs = null;
-            console.error(`Failed to fetch workflow inputs for run ${run.id}:`, await res.text());
           }
+        } catch (e) {
+          console.error("Error getting workflow inputs for run", run.id, e);
+          await setWorkflowInputs(String(run.id), null);
         }
-      } catch (e) {
-        console.error("Error getting workflow inputs for run", run.id, e);
+      } else {
+        inputs = cachedInputs;
       }
 
-      const organization = inputs?.organization;
-      const repo = inputs?.repo;
+      let organization;
+      if (inputs?.organization) {
+        organization = Array.isArray(inputs.organization) ? inputs.organization[0] : inputs.organization;
+        organization = organization.trim();
+      }
+
+      const repo = inputs?.repository || inputs?.repo;
 
       if (organization && repo) {
-        runDetail = `${organization}${repo ? `/${repo}` : ""}`;
+        runDetail = `${organization}/${repo}`;
       } else if (organization) {
         runDetail = organization;
-      } else if (repo) {
-        runDetail = repo;
       } else {
         runDetail = "⚠ Unknown Report";
         statusColor = "#ff6b6b";
@@ -199,5 +228,4 @@ export class RecentRunsWidget extends HTMLElement {
   }
 }
 
-// Updated custom element definition
 customElements.define("recent-runs-widget", RecentRunsWidget);
