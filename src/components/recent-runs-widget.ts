@@ -63,14 +63,14 @@ export class RecentRunsWidget extends HTMLElement {
   }
 
   private async loadWorkflowRuns() {
-    console.log('Starting loadWorkflowRuns...');
+    // console.log('Starting loadWorkflowRuns...'); // DEBUG
     let hasRenderedCache = false;
 
     try {
       // 1. Load cached data immediately
       const cachedRuns = await getRecentRuns();
       if (cachedRuns && Array.isArray(cachedRuns)) {
-        console.log('Rendering cached runs');
+        // console.log('Rendering cached runs'); // DEBUG
         this.renderWorkflowRuns(cachedRuns);
         hasRenderedCache = true;
       }
@@ -86,7 +86,7 @@ export class RecentRunsWidget extends HTMLElement {
       }
 
       // 2. Fetch fresh data from API in background
-      console.log('Fetching fresh workflow runs...');
+      // console.log('Fetching fresh workflow runs...'); // DEBUG
       const response = await fetch("/api/workflow-runs");
       if (!response.ok) throw new Error(`API error: ${response.status}`);
       const data = await response.json();
@@ -164,23 +164,54 @@ export class RecentRunsWidget extends HTMLElement {
 
       let inputs: Record<string, any> | null = null;
       const cachedInputs = await getWorkflowInputs(String(run.id));
+      // console.log(`[Run ${run.id}] Cached inputs retrieved:`, JSON.stringify(cachedInputs)); // DEBUG
 
-      if (cachedInputs === undefined) {
+      // Fetch if cache is empty (null) or truly undefined
+      if (cachedInputs === null || cachedInputs === undefined) {
+        // console.log(`[Run ${run.id}] No cache found, fetching inputs...`); // DEBUG
         try {
-          console.log(`Fetching artifacts for run ${run.id}...`);
+          // console.log(`Fetching artifacts for run ${run.id}...`); // DEBUG
           const artifacts = await fetchArtifactsList(String(run.id));
-          const inputsArtifact = artifacts.find((a: Artifact) =>
+          // Find all workflow input artifacts
+          const inputsArtifacts = artifacts.filter((a: Artifact) =>
             a.name.startsWith('workflow-inputs-') ||
             a.name === 'workflow-inputs' ||
             a.name === 'input' ||
             a.name === 'workflow_inputs'
           );
 
-          if (inputsArtifact) {
-            const zipData = await downloadArtifactZip(inputsArtifact, String(run.id));
-            const unzippedData = await unzipArtifact(zipData) as Record<string, any> | Record<string, any>[];
-            const processedInputs = Array.isArray(unzippedData) ? unzippedData[0] : unzippedData;
-            inputs = processedInputs as Record<string, any>;
+          if (inputsArtifacts.length > 0) {
+            // Process all artifacts and merge results
+            const allInputs = await Promise.all(inputsArtifacts.map(async (artifact) => {
+              const zipData = await downloadArtifactZip(artifact, String(run.id));
+              const unzippedData = await unzipArtifact(zipData) as Record<string, any> | Record<string, any>[];
+              return Array.isArray(unzippedData) ? unzippedData[0] : unzippedData;
+            }));
+
+            // Merge organizations from all inputs
+            const allOrgs = new Set<string>();
+            let commonRepo = '';
+
+            allInputs.forEach(input => {
+              if (input?.organization) {
+                const orgs = Array.isArray(input.organization) ? input.organization : [input.organization];
+                orgs.forEach((org: string | unknown) => {
+                  if (typeof org === 'string') {
+                    allOrgs.add(org.trim());
+                  }
+                });
+              }
+              // Use the first repo we find consistently
+              if (!commonRepo && (input?.repository || input?.repo)) {
+                commonRepo = input.repository || input.repo;
+              }
+            });
+
+            inputs = {
+              organization: [...allOrgs],
+              repo: commonRepo
+            };
+            // console.log(`Saving inputs for run ${run.id}:`, inputs); // DEBUG
             await setWorkflowInputs(String(run.id), inputs);
           } else {
             await setWorkflowInputs(String(run.id), null);
@@ -190,21 +221,30 @@ export class RecentRunsWidget extends HTMLElement {
           await setWorkflowInputs(String(run.id), null);
         }
       } else {
+        // console.log(`[Run ${run.id}] Using cached inputs:`, JSON.stringify(cachedInputs)); // DEBUG
         inputs = cachedInputs;
       }
 
-      let organization;
+      // Get all organizations and repo from inputs
+      let organizations: string[] = [];
+      // console.log(`[Run ${run.id}] Final inputs object for display:`, JSON.stringify(inputs)); // DEBUG
       if (inputs?.organization) {
-        organization = Array.isArray(inputs.organization) ? inputs.organization[0] : inputs.organization;
-        organization = organization.trim();
+        organizations = Array.isArray(inputs.organization)
+          ? inputs.organization.map((o: string) => o.trim())
+          : [String(inputs.organization).trim()]; // Ensure it's treated as a string array
+        // console.log(`[Run ${run.id}] Found organizations for display:`, organizations); // DEBUG
       }
 
       const repo = inputs?.repository || inputs?.repo;
+      // console.log(`[Run ${run.id}] Found repo for display:`, repo); // DEBUG
 
-      if (organization && repo) {
-        runDetail = `${organization}/${repo}`;
-      } else if (organization) {
-        runDetail = organization;
+      // If we have multiple orgs, join them with commas
+      const displayOrgs = organizations.join(", ");
+
+      if (displayOrgs && repo) {
+        runDetail = `${displayOrgs}/${repo}`;
+      } else if (displayOrgs) {
+        runDetail = displayOrgs;
       } else {
         runDetail = "⚠ Unknown Report";
         statusColor = "#ff6b6b";
