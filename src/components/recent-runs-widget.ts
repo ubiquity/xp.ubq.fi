@@ -7,10 +7,7 @@ import {
   setRecentRuns,
   setWorkflowInputs,
 } from "../db/recent-runs-cache";
-import { fetchArtifactsList } from "../fetch-artifacts-list";
-import { downloadArtifactZip } from "../download-artifact";
-import { unzipArtifact } from "../unzip-artifact";
-import type { Artifact } from "../types";
+import type { Artifact } from "../types"; // Keep Artifact type if needed elsewhere, or remove if unused after changes
 
 interface WorkflowRun {
   id: number;
@@ -62,52 +59,48 @@ export class RecentRunsWidget extends HTMLElement {
     }
   }
 
+  /**
+   * Public method to trigger a refresh of the widget from cache.
+   */
+  public refreshData() {
+    this.loadWorkflowRuns();
+  }
+
   private async loadWorkflowRuns() {
     // console.log('Starting loadWorkflowRuns...'); // DEBUG
-    let hasRenderedCache = false;
-
     try {
       // 1. Load cached data immediately
       const cachedRuns = await getRecentRuns();
-      if (cachedRuns && Array.isArray(cachedRuns)) {
+
+      // 2. Render runs if cache exists and is not empty
+      if (cachedRuns && Array.isArray(cachedRuns) && cachedRuns.length > 0) {
         // console.log('Rendering cached runs'); // DEBUG
+        // renderWorkflowRuns clears the container first, removing any previous loader/error
         this.renderWorkflowRuns(cachedRuns);
-        hasRenderedCache = true;
+      } else {
+        // 3. Show loading indicator ONLY if cache is empty/null AND container is currently empty
+        // This prevents replacing an existing error message with a loader.
+        // The background sync will trigger refreshData later if runs become available.
+        if (!this.runsContainer.hasChildNodes()) {
+            this.runsContainer.innerHTML = `
+              <div class="recent-runs-widget__loading">
+                <div class="recent-runs-widget__spinner"></div>
+                <div>Loading reports...</div>
+              </div>
+            `;
+        }
+        // If cache was null/empty, the background sync will eventually trigger a refresh
+        // which will call this function again. If runs are found then,
+        // renderWorkflowRuns will replace the loading indicator.
       }
 
-      // Show loading only if we don't have cache
-      if (!hasRenderedCache) {
-        this.runsContainer.innerHTML = `
-          <div class="recent-runs-widget__loading">
-            <div class="recent-runs-widget__spinner"></div>
-            <div>Loading reports...</div>
-          </div>
-        `;
-      }
+      // NOTE: Fetching fresh data and updating cache is now handled externally.
+      // This function now ONLY reads from the cache.
 
-      // 2. Fetch fresh data from API in background
-      // console.log('Fetching fresh workflow runs...'); // DEBUG
-      const response = await fetch("/api/workflow-runs");
-      if (!response.ok) throw new Error(`API error: ${response.status}`);
-      const data = await response.json();
-
-      if (!Array.isArray(data.workflow_runs)) {
-        throw new Error('Invalid API response format');
-      }
-
-      // Find any new runs that we don't have cached
-      const existingRunIds = new Set((cachedRuns || []).map(r => r.id));
-      const newRuns = data.workflow_runs.filter((run: WorkflowRun) => !existingRunIds.has(run.id));
-
-      // Only update cache and re-render if we have new runs
-      if (newRuns.length > 0) {
-        await setRecentRuns(data.workflow_runs);
-        this.renderWorkflowRuns(data.workflow_runs);
-      }
     } catch (error) {
-      console.error("Error in loadWorkflowRuns:", error);
-      // Show error only if we have no data at all
-      if (!this.runsContainer.querySelector('.workflow-run')) {
+      console.error("Error loading/rendering cached runs:", error);
+      // Show error only if nothing else is currently displayed
+      if (!this.runsContainer.hasChildNodes()) {
         this.runsContainer.innerHTML = `
           <div class="recent-runs-widget__error">
             Failed to load reports
@@ -143,16 +136,10 @@ export class RecentRunsWidget extends HTMLElement {
     }
 
     for (const run of runsToRender) {
+      // Removed the check for 'final-aggregated-results' artifact existence here.
+      // This check should happen during the background sync process before caching.
+      // Assume if a run is in the cache, it's valid to display.
       try {
-        // Check if the required artifact exists before rendering the run
-        const artifacts = await fetchArtifactsList(String(run.id));
-        const hasRequiredArtifact = artifacts.some(a => a.name === 'final-aggregated-results');
-
-        if (!hasRequiredArtifact) {
-          console.log(`Skipping run ${run.id}: Missing required artifact`);
-          continue; // Skip this run if it doesn't have the required artifact
-        }
-
         const runElement = document.createElement("div");
         const urlParams = new URLSearchParams(window.location.search);
         const currentRunId = urlParams.get('run');
@@ -172,70 +159,11 @@ export class RecentRunsWidget extends HTMLElement {
       let statusColor = '#63e6be';
       let runDetail = "";
 
-      let inputs: Record<string, any> | null = null;
-      const cachedInputs = await getWorkflowInputs(String(run.id));
-      // console.log(`[Run ${run.id}] Cached inputs retrieved:`, JSON.stringify(cachedInputs)); // DEBUG
+      // --- Read inputs ONLY from cache ---
+      const inputs = await getWorkflowInputs(String(run.id));
+      // console.log(`[Run ${run.id}] Read inputs from cache:`, JSON.stringify(inputs)); // DEBUG
 
-      // Fetch if cache is empty (null) or truly undefined
-      if (cachedInputs === null || cachedInputs === undefined) {
-        // console.log(`[Run ${run.id}] No cache found, fetching inputs...`); // DEBUG
-        try {
-          // console.log(`Fetching artifacts for run ${run.id}...`); // DEBUG
-          const artifacts = await fetchArtifactsList(String(run.id));
-          // Find all workflow input artifacts
-          const inputsArtifacts = artifacts.filter((a: Artifact) =>
-            a.name.startsWith('workflow-inputs-') ||
-            a.name === 'workflow-inputs' ||
-            a.name === 'input' ||
-            a.name === 'workflow_inputs'
-          );
-
-          if (inputsArtifacts.length > 0) {
-            // Process all artifacts and merge results
-            const allInputs = await Promise.all(inputsArtifacts.map(async (artifact) => {
-              const zipData = await downloadArtifactZip(artifact, String(run.id));
-              const unzippedData = await unzipArtifact(zipData) as Record<string, any> | Record<string, any>[];
-              return Array.isArray(unzippedData) ? unzippedData[0] : unzippedData;
-            }));
-
-            // Merge organizations from all inputs
-            const allOrgs = new Set<string>();
-            let commonRepo = '';
-
-            allInputs.forEach(input => {
-              if (input?.organization) {
-                const orgs = Array.isArray(input.organization) ? input.organization : [input.organization];
-                orgs.forEach((org: string | unknown) => {
-                  if (typeof org === 'string') {
-                    allOrgs.add(org.trim());
-                  }
-                });
-              }
-              // Use the first repo we find consistently
-              if (!commonRepo && (input?.repository || input?.repo)) {
-                commonRepo = input.repository || input.repo;
-              }
-            });
-
-            inputs = {
-              organization: [...allOrgs],
-              repo: commonRepo
-            };
-            // console.log(`Saving inputs for run ${run.id}:`, inputs); // DEBUG
-            await setWorkflowInputs(String(run.id), inputs);
-          } else {
-            await setWorkflowInputs(String(run.id), null);
-          }
-        } catch (e) {
-          console.error("Error getting workflow inputs for run", run.id, e);
-          await setWorkflowInputs(String(run.id), null);
-        }
-      } else {
-        // console.log(`[Run ${run.id}] Using cached inputs:`, JSON.stringify(cachedInputs)); // DEBUG
-        inputs = cachedInputs;
-      }
-
-      // Get all organizations and repo from inputs
+      // --- Determine display details based on cached inputs ---
       let organizations: string[] = [];
       // console.log(`[Run ${run.id}] Final inputs object for display:`, JSON.stringify(inputs)); // DEBUG
       if (inputs?.organization) {
@@ -255,9 +183,14 @@ export class RecentRunsWidget extends HTMLElement {
         runDetail = `${displayOrgs}/${repo}`;
       } else if (displayOrgs) {
         runDetail = displayOrgs;
+      } else if (inputs === undefined || inputs === null) {
+        // If inputs are not yet cached, show a placeholder
+        runDetail = "Loading details...";
+        statusColor = "#fab005"; // Use a neutral/warning color
       } else {
+        // Inputs are cached but don't contain org/repo
         runDetail = "⚠ Unknown Report";
-        statusColor = "#ff6b6b";
+        statusColor = "#ff6b6b"; // Error color
       }
 
       runElement.innerHTML = `

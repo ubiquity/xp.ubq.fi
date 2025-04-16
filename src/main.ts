@@ -11,6 +11,12 @@ import { InsightsView } from "./components/insights-view"; // Import the new com
 import { cleanupWorker, loadArtifactData } from "./workers/artifact-worker-manager";
 import { calculateContributorXpAtTime } from "./calculate-contributor-xp-at-time"; // Import the new helper
 import type { OrgRepoStructure } from "./data-transform"; // Import OrgRepoStructure type
+import { fetchArtifactsList } from "./fetch-artifacts-list"; // Import for sync
+import { downloadArtifactZip } from "./download-artifact"; // Import for sync
+import { unzipArtifact } from "./unzip-artifact"; // Import for sync
+import { getRecentRuns, setRecentRuns, getWorkflowInputs, setWorkflowInputs } from "./db/recent-runs-cache"; // Import cache functions
+import type { RecentRunsWidget } from "./components/recent-runs-widget"; // Import widget type for refresh
+import type { Artifact } from "./types"; // Import Artifact type
 
 type ViewMode = "leaderboard" | "timeseries" | "insights"; // Add insights view mode
 
@@ -24,10 +30,139 @@ loadingOverlay.appendChild(progressText);
 
 const MS_PER_MINUTE = 60 * 1000;
 
+// --- Background Sync Logic ---
+async function synchronizeRecentRunsCache() {
+  console.log("Starting background recent runs cache synchronization...");
+  const recentRunsWidget = document.querySelector("recent-runs-widget") as RecentRunsWidget | null;
+
+  try {
+    // 1. Fetch latest runs from API
+    const response = await fetch("/api/workflow-runs");
+    if (!response.ok) throw new Error(`API error fetching runs: ${response.status}`);
+    const data = await response.json();
+    if (!Array.isArray(data.workflow_runs)) {
+      throw new Error('Invalid API response format for workflow runs');
+    }
+    const latestRuns: any[] = data.workflow_runs; // Assuming type matches WorkflowRun in widget
+
+    // 2. Get cached runs
+    const cachedRuns = await getRecentRuns() || [];
+    const cachedRunIds = new Set(cachedRuns.map(r => r.id));
+
+    // 3. Filter latestRuns to include only those with the required artifact
+    const validRuns: any[] = [];
+    const runsToProcessInputsFor: any[] = []; // Runs that are valid but need inputs cached
+    console.log(`Checking ${latestRuns.length} runs from API for validity...`);
+    for (const run of latestRuns) {
+      try {
+        const artifacts = await fetchArtifactsList(String(run.id));
+        const hasRequiredArtifact = artifacts.some(a => a.name === 'final-aggregated-results');
+        if (hasRequiredArtifact) {
+          validRuns.push(run); // Add to list of runs to potentially cache/display
+          // Now check if this *valid* run needs its inputs cached
+          const inputs = await getWorkflowInputs(String(run.id));
+          if (inputs === undefined || inputs === null) {
+            runsToProcessInputsFor.push(run);
+          }
+        } else {
+          console.log(`Run ${run.id} is invalid (missing 'final-aggregated-results'). Filtering out.`);
+        }
+      } catch (artifactError) {
+        console.error(`Error checking artifacts for run ${run.id}, filtering out:`, artifactError);
+        // Treat runs with errors during artifact check as invalid for display
+      }
+    }
+    console.log(`${validRuns.length} runs are valid. ${runsToProcessInputsFor.length} of those need input caching.`);
+
+
+    // 4. Process inputs sequentially for identified *valid* runs needing inputs
+    let processedCount = 0;
+    for (const run of runsToProcessInputsFor) { // Iterate only over runs needing input processing
+      console.log(`Processing inputs for valid run ${run.id}...`);
+      try {
+        const artifacts = await fetchArtifactsList(String(run.id));
+        const inputsArtifacts = artifacts.filter((a: Artifact) =>
+          a.name.startsWith('workflow-inputs-') ||
+          a.name === 'workflow-inputs' ||
+          a.name === 'input' ||
+          a.name === 'workflow_inputs'
+        );
+
+        let inputs: Record<string, any> | null = null;
+        if (inputsArtifacts.length > 0) {
+          const allInputsData = await Promise.all(inputsArtifacts.map(async (artifact) => {
+            const zipData = await downloadArtifactZip(artifact, String(run.id));
+            const unzippedData = await unzipArtifact(zipData) as Record<string, any> | Record<string, any>[];
+            return Array.isArray(unzippedData) ? unzippedData[0] : unzippedData;
+          }));
+
+          const allOrgs = new Set<string>();
+          let commonRepo = '';
+          allInputsData.forEach(inputData => {
+            if (inputData?.organization) {
+              const orgs = Array.isArray(inputData.organization) ? inputData.organization : [inputData.organization];
+              orgs.forEach((org: string | unknown) => {
+                if (typeof org === 'string') allOrgs.add(org.trim());
+              });
+            }
+            if (!commonRepo && (inputData?.repository || inputData?.repo)) {
+              commonRepo = inputData.repository || inputData.repo;
+            }
+          });
+          inputs = { organization: [...allOrgs], repo: commonRepo };
+        }
+        // Save inputs (or null if no input artifacts found)
+        await setWorkflowInputs(String(run.id), inputs);
+        console.log(`Successfully cached inputs for run ${run.id}.`);
+        processedCount++;
+
+        // Optionally refresh widget after each successful processing
+        if (recentRunsWidget) {
+          recentRunsWidget.refreshData();
+        }
+
+      } catch (e) {
+        console.error(`Error processing inputs for run ${run.id} during sync:`, e);
+        // Consider setting inputs to null or an error state in cache? For now, just log.
+        // await setWorkflowInputs(String(run.id), { error: "Failed to process" }); // Example error state
+      }
+    }
+
+    // 5. Update the main runs list cache ONLY with the filtered validRuns list
+    // Compare the filtered valid list with the current cache
+    if (JSON.stringify(cachedRuns) !== JSON.stringify(validRuns)) {
+        console.log("Updating main recent runs list in cache with filtered valid runs.");
+        await setRecentRuns(validRuns); // Save only the valid runs
+        // Refresh widget if the list of valid runs changed
+        if (recentRunsWidget) {
+             // Refresh regardless of processedCount, as the list itself might have changed
+             // (e.g., invalid runs removed)
+            recentRunsWidget.refreshData();
+        }
+    } else if (processedCount > 0 && recentRunsWidget) {
+        // If the list didn't change but inputs were processed, still refresh
+        console.log("Refreshing widget as inputs were processed.");
+        recentRunsWidget.refreshData();
+    }
+
+
+    console.log(`Background sync finished. Processed inputs for ${processedCount} valid runs.`);
+
+  } catch (error) {
+    console.error("Error during background recent runs cache synchronization:", error);
+  }
+}
+
+
+// --- Main Initialization ---
 async function init() {
   try {
-    // Initialize dev mode widget
-    // (No longer needed: widget is instantiated via <dev-mode-widget> in HTML)
+    // Initialize recent runs widget (it loads initial cache itself)
+    // const recentRunsWidget = document.querySelector("recent-runs-widget"); // Get instance if needed later
+
+    // Start background synchronization *after* initial UI setup
+    // Use setTimeout to ensure it doesn't block initial render
+    setTimeout(synchronizeRecentRunsCache, 100); // Delay slightly
 
     const runId = getRunIdFromQuery();
     // Removed the block that showed the "Development Mode" message
@@ -553,8 +688,14 @@ async function init() {
 
     // Clean up on unload
     window.addEventListener("unload", cleanupWorker);
+
   } catch (error) {
-    console.error(error);
+    console.error("Initialization error:", error);
+    // Display a user-friendly error message on the page?
+    const root = document.getElementById("xp-analytics-root");
+    if (root) {
+        root.innerHTML = `<div class="error-message">Failed to initialize application. Please check the console for details.</div>`;
+    }
   }
 }
 
