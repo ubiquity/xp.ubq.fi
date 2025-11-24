@@ -7,10 +7,7 @@ import {
   setRecentRuns,
   setWorkflowInputs,
 } from "../db/recent-runs-cache";
-import { fetchArtifactsList } from "../fetch-artifacts-list";
-import { downloadArtifactZip } from "../download-artifact";
-import { unzipArtifact } from "../unzip-artifact";
-import type { Artifact } from "../types";
+import type { Artifact } from "../types"; // Keep Artifact type if needed elsewhere, or remove if unused after changes
 
 interface WorkflowRun {
   id: number;
@@ -33,9 +30,16 @@ export class RecentRunsWidget extends HTMLElement {
   private container!: HTMLDivElement;
   private runsContainer!: HTMLDivElement;
   private currentRunId: string | null = null;
+  private visibleRuns: WorkflowRun[] = [];
+  private allRuns: WorkflowRun[] = [];
+  private currentBatchSize = 0;
+  private isPortrait = false;
+  private isLoadingMore = false;
+  private resizeObserver: ResizeObserver;
 
   constructor() {
     super();
+    console.log('RecentRunsWidget version: 2025-04-16-21:48');
 
     this.container = document.createElement("div");
     this.container.className = "recent-runs-widget";
@@ -49,11 +53,21 @@ export class RecentRunsWidget extends HTMLElement {
     title.className = "recent-runs-widget__title";
     this.container.insertBefore(title, this.runsContainer);
 
+    // Initialize ResizeObserver
+    this.resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        this.handleResize(entry.contentRect);
+      }
+    });
+
     this.loadWorkflowRuns();
   }
 
   connectedCallback() {
     this.appendChild(this.container);
+    this.resizeObserver.observe(this.runsContainer);
+    this.checkOrientation();
+    this.setupScrollHandlers();
   }
 
   disconnectedCallback() {
@@ -62,52 +76,48 @@ export class RecentRunsWidget extends HTMLElement {
     }
   }
 
+  /**
+   * Public method to trigger a refresh of the widget from cache.
+   */
+  public refreshData() {
+    this.loadWorkflowRuns();
+  }
+
   private async loadWorkflowRuns() {
     // console.log('Starting loadWorkflowRuns...'); // DEBUG
-    let hasRenderedCache = false;
-
     try {
       // 1. Load cached data immediately
       const cachedRuns = await getRecentRuns();
-      if (cachedRuns && Array.isArray(cachedRuns)) {
+
+      // 2. Render runs if cache exists and is not empty
+      if (cachedRuns && Array.isArray(cachedRuns) && cachedRuns.length > 0) {
         // console.log('Rendering cached runs'); // DEBUG
+        // renderWorkflowRuns clears the container first, removing any previous loader/error
         this.renderWorkflowRuns(cachedRuns);
-        hasRenderedCache = true;
+      } else {
+        // 3. Show loading indicator ONLY if cache is empty/null AND container is currently empty
+        // This prevents replacing an existing error message with a loader.
+        // The background sync will trigger refreshData later if runs become available.
+        if (!this.runsContainer.hasChildNodes()) {
+            this.runsContainer.innerHTML = `
+              <div class="recent-runs-widget__loading">
+                <div class="recent-runs-widget__spinner"></div>
+                <div>Loading reports...</div>
+              </div>
+            `;
+        }
+        // If cache was null/empty, the background sync will eventually trigger a refresh
+        // which will call this function again. If runs are found then,
+        // renderWorkflowRuns will replace the loading indicator.
       }
 
-      // Show loading only if we don't have cache
-      if (!hasRenderedCache) {
-        this.runsContainer.innerHTML = `
-          <div class="recent-runs-widget__loading">
-            <div class="recent-runs-widget__spinner"></div>
-            <div>Loading reports...</div>
-          </div>
-        `;
-      }
+      // NOTE: Fetching fresh data and updating cache is now handled externally.
+      // This function now ONLY reads from the cache.
 
-      // 2. Fetch fresh data from API in background
-      // console.log('Fetching fresh workflow runs...'); // DEBUG
-      const response = await fetch("/api/workflow-runs");
-      if (!response.ok) throw new Error(`API error: ${response.status}`);
-      const data = await response.json();
-
-      if (!Array.isArray(data.workflow_runs)) {
-        throw new Error('Invalid API response format');
-      }
-
-      // Find any new runs that we don't have cached
-      const existingRunIds = new Set((cachedRuns || []).map(r => r.id));
-      const newRuns = data.workflow_runs.filter((run: WorkflowRun) => !existingRunIds.has(run.id));
-
-      // Only update cache and re-render if we have new runs
-      if (newRuns.length > 0) {
-        await setRecentRuns(data.workflow_runs);
-        this.renderWorkflowRuns(data.workflow_runs);
-      }
     } catch (error) {
-      console.error("Error in loadWorkflowRuns:", error);
-      // Show error only if we have no data at all
-      if (!this.runsContainer.querySelector('.workflow-run')) {
+      console.error("Error loading/rendering cached runs:", error);
+      // Show error only if nothing else is currently displayed
+      if (!this.runsContainer.hasChildNodes()) {
         this.runsContainer.innerHTML = `
           <div class="recent-runs-widget__error">
             Failed to load reports
@@ -117,48 +127,105 @@ export class RecentRunsWidget extends HTMLElement {
     }
   }
 
-  private async renderWorkflowRuns(runs: WorkflowRun[]) {
-    const itemHeight = 68;
-    let numToDisplay = 10;
+  private handleResize(rect: DOMRectReadOnly) {
+    this.isPortrait = rect.width < rect.height;
+    this.updateScrollBehavior();
+  }
 
-    if (this.offsetHeight > 0) {
-      const availableHeight = this.offsetHeight - 40;
-      numToDisplay = Math.max(1, Math.floor(availableHeight / itemHeight));
+  private checkOrientation() {
+    const rect = this.runsContainer.getBoundingClientRect();
+    this.isPortrait = rect.width < rect.height;
+    this.updateScrollBehavior();
+  }
+
+  private calculateVisibleItems(): number {
+    if (!this.runsContainer.firstChild) return 5;
+
+    const containerHeight = this.runsContainer.clientHeight;
+    const firstRun = this.runsContainer.firstChild as HTMLElement;
+    const runHeight = firstRun.offsetHeight;
+
+    return Math.max(5, Math.ceil(containerHeight / runHeight));
+  }
+
+  private updateScrollBehavior() {
+    if (this.isPortrait) {
+      this.runsContainer.style.overflowX = 'auto';
+      this.runsContainer.style.overflowY = 'hidden';
+    } else {
+      this.runsContainer.style.overflowY = 'auto';
+      this.runsContainer.style.overflowX = 'hidden';
     }
+  }
 
-    this.runsContainer.innerHTML = "";
+  private setupScrollHandlers() {
+    this.runsContainer.addEventListener('scroll', () => {
+      if (this.isLoadingMore) return;
 
-    const uniqueRuns = runs.reduce<WorkflowRun[]>((acc, run) => {
-      if (!acc.find(r => r.id === run.id)) {
-        acc.push(run);
-      }
-      return acc;
-    }, []);
+      if (this.isPortrait) {
+        // Check if scrolled near right edge
+        const scrollLeft = this.runsContainer.scrollLeft;
+        const scrollWidth = this.runsContainer.scrollWidth;
+        const clientWidth = this.runsContainer.clientWidth;
 
-    const runsToRender = uniqueRuns.slice(0, numToDisplay);
-
-    if (!runsToRender.length) {
-      this.runsContainer.innerHTML = '<div class="recent-runs-widget__error">No workflow runs found</div>';
-      return;
-    }
-
-    for (const run of runsToRender) {
-      try {
-        // Check if the required artifact exists before rendering the run
-        const artifacts = await fetchArtifactsList(String(run.id));
-        const hasRequiredArtifact = artifacts.some(a => a.name === 'final-aggregated-results');
-
-        if (!hasRequiredArtifact) {
-          console.log(`Skipping run ${run.id}: Missing required artifact`);
-          continue; // Skip this run if it doesn't have the required artifact
+        if (scrollLeft + clientWidth >= scrollWidth - 100) {
+          this.loadMoreRuns();
         }
+      } else {
+        // Check if scrolled near bottom
+        const scrollTop = this.runsContainer.scrollTop;
+        const scrollHeight = this.runsContainer.scrollHeight;
+        const clientHeight = this.runsContainer.clientHeight;
 
-        const runElement = document.createElement("div");
-        const urlParams = new URLSearchParams(window.location.search);
-        const currentRunId = urlParams.get('run');
-        const isActiveRun = currentRunId === String(run.id);
+        if (scrollTop + clientHeight >= scrollHeight - 100) {
+          this.loadMoreRuns();
+        }
+      }
+    });
+  }
 
-        runElement.className = `workflow-run${isActiveRun ? ' workflow-run--active' : ''}`;
+  private async loadMoreRuns() {
+    if (this.visibleRuns.length >= this.allRuns.length) return;
+
+    this.isLoadingMore = true;
+
+    try {
+      // Show loading indicator
+      const loader = document.createElement('div');
+      loader.className = 'recent-runs-widget__loading';
+      loader.innerHTML = '<div class="recent-runs-widget__spinner"></div>';
+      this.runsContainer.appendChild(loader);
+
+      // Load next batch
+      const nextBatchSize = this.isPortrait ? 5 : this.calculateVisibleItems();
+      const nextBatch = this.allRuns.slice(
+        this.visibleRuns.length,
+        this.visibleRuns.length + nextBatchSize
+      );
+
+      // Remove loader
+      this.runsContainer.removeChild(loader);
+
+      // Render new runs
+      for (const run of nextBatch) {
+        await this.renderRun(run);
+      }
+
+      this.visibleRuns = [...this.visibleRuns, ...nextBatch];
+      this.currentBatchSize += nextBatchSize;
+    } finally {
+      this.isLoadingMore = false;
+    }
+  }
+
+  private async renderRun(run: WorkflowRun): Promise<void> {
+    try {
+      const runElement = document.createElement("div");
+      const urlParams = new URLSearchParams(window.location.search);
+      const currentRunId = urlParams.get('run');
+      const isActiveRun = currentRunId === String(run.id);
+
+      runElement.className = `workflow-run${isActiveRun ? ' workflow-run--active' : ''}`;
 
       const timestamp = new Date(run.created_at).toLocaleString(undefined, {
         month: 'short',
@@ -172,89 +239,24 @@ export class RecentRunsWidget extends HTMLElement {
       let statusColor = '#63e6be';
       let runDetail = "";
 
-      let inputs: Record<string, any> | null = null;
-      const cachedInputs = await getWorkflowInputs(String(run.id));
-      // console.log(`[Run ${run.id}] Cached inputs retrieved:`, JSON.stringify(cachedInputs)); // DEBUG
-
-      // Fetch if cache is empty (null) or truly undefined
-      if (cachedInputs === null || cachedInputs === undefined) {
-        // console.log(`[Run ${run.id}] No cache found, fetching inputs...`); // DEBUG
-        try {
-          // console.log(`Fetching artifacts for run ${run.id}...`); // DEBUG
-          const artifacts = await fetchArtifactsList(String(run.id));
-          // Find all workflow input artifacts
-          const inputsArtifacts = artifacts.filter((a: Artifact) =>
-            a.name.startsWith('workflow-inputs-') ||
-            a.name === 'workflow-inputs' ||
-            a.name === 'input' ||
-            a.name === 'workflow_inputs'
-          );
-
-          if (inputsArtifacts.length > 0) {
-            // Process all artifacts and merge results
-            const allInputs = await Promise.all(inputsArtifacts.map(async (artifact) => {
-              const zipData = await downloadArtifactZip(artifact, String(run.id));
-              const unzippedData = await unzipArtifact(zipData) as Record<string, any> | Record<string, any>[];
-              return Array.isArray(unzippedData) ? unzippedData[0] : unzippedData;
-            }));
-
-            // Merge organizations from all inputs
-            const allOrgs = new Set<string>();
-            let commonRepo = '';
-
-            allInputs.forEach(input => {
-              if (input?.organization) {
-                const orgs = Array.isArray(input.organization) ? input.organization : [input.organization];
-                orgs.forEach((org: string | unknown) => {
-                  if (typeof org === 'string') {
-                    allOrgs.add(org.trim());
-                  }
-                });
-              }
-              // Use the first repo we find consistently
-              if (!commonRepo && (input?.repository || input?.repo)) {
-                commonRepo = input.repository || input.repo;
-              }
-            });
-
-            inputs = {
-              organization: [...allOrgs],
-              repo: commonRepo
-            };
-            // console.log(`Saving inputs for run ${run.id}:`, inputs); // DEBUG
-            await setWorkflowInputs(String(run.id), inputs);
-          } else {
-            await setWorkflowInputs(String(run.id), null);
-          }
-        } catch (e) {
-          console.error("Error getting workflow inputs for run", run.id, e);
-          await setWorkflowInputs(String(run.id), null);
-        }
-      } else {
-        // console.log(`[Run ${run.id}] Using cached inputs:`, JSON.stringify(cachedInputs)); // DEBUG
-        inputs = cachedInputs;
-      }
-
-      // Get all organizations and repo from inputs
+      const inputs = await getWorkflowInputs(String(run.id));
       let organizations: string[] = [];
-      // console.log(`[Run ${run.id}] Final inputs object for display:`, JSON.stringify(inputs)); // DEBUG
       if (inputs?.organization) {
         organizations = Array.isArray(inputs.organization)
           ? inputs.organization.map((o: string) => o.trim())
-          : [String(inputs.organization).trim()]; // Ensure it's treated as a string array
-        // console.log(`[Run ${run.id}] Found organizations for display:`, organizations); // DEBUG
+          : [String(inputs.organization).trim()];
       }
 
       const repo = inputs?.repository || inputs?.repo;
-      // console.log(`[Run ${run.id}] Found repo for display:`, repo); // DEBUG
-
-      // If we have multiple orgs, join them with commas
       const displayOrgs = organizations.join(", ");
 
       if (displayOrgs && repo) {
         runDetail = `${displayOrgs}/${repo}`;
       } else if (displayOrgs) {
         runDetail = displayOrgs;
+      } else if (inputs === undefined || inputs === null) {
+        runDetail = "Loading details...";
+        statusColor = "#fab005";
       } else {
         runDetail = "⚠ Unknown Report";
         statusColor = "#ff6b6b";
@@ -274,12 +276,42 @@ export class RecentRunsWidget extends HTMLElement {
       });
 
       this.runsContainer.appendChild(runElement);
-      } catch (error) {
-        console.error(`Error rendering run ${run.id}:`, error);
-        // Skip this run if we encounter any errors
-        continue;
-      }
+    } catch (error) {
+      console.error(`Error rendering run ${run.id}:`, error);
     }
+  }
+
+  private async renderWorkflowRuns(runs: WorkflowRun[]) {
+    console.log('Original runs count:', runs.length);
+
+    this.allRuns = runs.reduce<WorkflowRun[]>((acc, run) => {
+      if (!acc.find(r => r.id === run.id)) {
+        acc.push(run);
+      }
+      return acc;
+    }, []);
+
+    console.log('Unique runs count:', this.allRuns.length);
+    console.log('Current orientation:', this.isPortrait ? 'portrait' : 'landscape');
+
+    // Always load all available runs
+    this.currentBatchSize = this.allRuns.length;
+    this.visibleRuns = this.allRuns.slice(0, this.currentBatchSize);
+
+    console.log('Will display runs:', this.visibleRuns.length);
+
+    this.runsContainer.innerHTML = "";
+
+    if (!this.visibleRuns.length) {
+      this.runsContainer.innerHTML = '<div class="recent-runs-widget__error">No workflow runs found</div>';
+      return;
+    }
+
+    for (const run of this.visibleRuns) {
+      await this.renderRun(run);
+    }
+
+    console.log('Finished rendering runs');
   }
 }
 

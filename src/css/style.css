@@ -68,8 +68,8 @@ select {
   /* min-width: 160px; */
   border-radius: 4px;
 }
-.xp-analytics-view-toggle {
-  margin-left: 32px;
+button {
+  margin-left: 4px;
   font-size: 12px;
   padding: 8px 16px;
   border-radius: 4px;
@@ -77,6 +77,8 @@ select {
   background: #222;
   color: #fff;
   cursor: pointer;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 /* Issue Filter Styles */
@@ -135,8 +137,8 @@ select {
   display: flex;
   flex: 1; /* Allow this container to grow and fill space */
   overflow: hidden; /* Prevent content overflow */
-  gap: 16px; /* Add gap between chart and sidebar */
-  padding: 0 16px 16px 16px; /* Add padding around main content, except top */
+  /* gap: 16px; */ /* Add gap between chart and sidebar */
+  /* padding: 0 16px 16px 16px; */ /* Add padding around main content, except top */
   box-sizing: border-box;
 }
 
@@ -366,5 +368,5 @@ text {
 
 
 button {
-    font-weight: 600;
+    /* font-weight: 600; */
 }

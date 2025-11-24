@@ -1,9 +1,12 @@
 import { staticPlugin } from "@elysiajs/static";
 import { Elysia } from "elysia";
-import { readdir, stat, unlink } from "node:fs/promises";
+import { mkdir, readdir, stat, unlink } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { ORG, REPO } from "../src/constants.ts";
 import { getInstallationToken } from "./local-auth.ts";
+
+const artifactsDir = resolve(process.cwd(), "tests/fixtures/artifacts");
+await mkdir(artifactsDir, { recursive: true });
 
 // Terminal colors for better visibility
 const colors = {
@@ -69,28 +72,28 @@ app.use(
     prefix: "/",
     assets: resolve(process.cwd(), "dist"),
     alwaysStatic: true,
-  })
+  }),
 );
 app.use(
   staticPlugin({
     prefix: "/src",
     assets: resolve(process.cwd(), "src"),
     alwaysStatic: true,
-  })
+  }),
 );
 app.use(
   staticPlugin({
     prefix: "/css",
     assets: resolve(process.cwd(), "src/css"),
     alwaysStatic: true,
-  })
+  }),
 );
 app.use(
   staticPlugin({
     prefix: "/tests/fixtures/artifacts",
     assets: resolve(process.cwd(), "tests/fixtures/artifacts"),
     alwaysStatic: true,
-  })
+  }),
 );
 
 /**
@@ -109,7 +112,11 @@ app.get("/api/workflow-inputs/:runId", async ({ params, set }) => {
     startTimer("workflowInputs");
     const token = await getInstallationToken();
     const artifactsUrl = `https://api.github.com/repos/${ORG}/${REPO}/actions/runs/${runId}/artifacts`;
-    log("API", `Fetching artifacts for run ${runId}: ${artifactsUrl}`, colors.blue);
+    log(
+      "API",
+      `Fetching artifacts for run ${runId}: ${artifactsUrl}`,
+      colors.blue,
+    );
 
     const artifactsResponse = await fetch(artifactsUrl, {
       headers: {
@@ -120,12 +127,14 @@ app.get("/api/workflow-inputs/:runId", async ({ params, set }) => {
 
     if (!artifactsResponse.ok) {
       set.status = artifactsResponse.status;
-      return { error: `GitHub API error: ${artifactsResponse.status} ${artifactsResponse.statusText}` };
+      return {
+        error: `GitHub API error: ${artifactsResponse.status} ${artifactsResponse.statusText}`,
+      };
     }
 
     const artifactsData = await artifactsResponse.json();
-    const artifact = artifactsData.artifacts.find((a: any) =>
-      a.name === `workflow-inputs-${runId}`
+    const artifact = artifactsData.artifacts.find(
+      (a: any) => a.name === `workflow-inputs-${runId}`,
     );
     if (!artifact) {
       set.status = 404;
@@ -143,7 +152,9 @@ app.get("/api/workflow-inputs/:runId", async ({ params, set }) => {
     });
     if (!artifactZipRes.ok) {
       set.status = artifactZipRes.status;
-      return { error: `Failed to download artifact zip: ${artifactZipRes.status} ${artifactZipRes.statusText}` };
+      return {
+        error: `Failed to download artifact zip: ${artifactZipRes.status} ${artifactZipRes.statusText}`,
+      };
     }
     const zipBuffer = await artifactZipRes.arrayBuffer();
     const zipData = new Uint8Array(zipBuffer);
@@ -177,15 +188,21 @@ app.get("/api/workflow-inputs/:runId", async ({ params, set }) => {
 
     endTimer("workflowInputs", "Fetched workflow inputs");
     set.status = 200;
-    set.headers = { "content-type": "application/json", "access-control-allow-origin": "*" };
+    set.headers = {
+      "content-type": "application/json",
+      "access-control-allow-origin": "*",
+    };
     return parsed;
   } catch (error: any) {
-    log("ERROR", `Failed to fetch workflow inputs: ${error.message}`, colors.red);
+    log(
+      "ERROR",
+      `Failed to fetch workflow inputs: ${error.message}`,
+      colors.red,
+    );
     set.status = 500;
     return { error: error.message };
   }
 });
-
 
 app.get("/api/download-artifact", async ({ query, set }) => {
   const artifactId = query.id;
@@ -202,11 +219,19 @@ app.get("/api/download-artifact", async ({ query, set }) => {
 
     // For test mode, serve from fixtures
     const runParam = query.run;
-    if (runParam === "test" || (runParam === "mini" && artifactId === "small-test-fixture")) {
-      log("ZIP", `Using fixture for: ${artifactId} (run=${runParam})`, colors.yellow);
+    if (
+      runParam === "test" ||
+      (runParam === "mini" && artifactId === "small-test-fixture")
+    ) {
+      log(
+        "ZIP",
+        `Using fixture for: ${artifactId} (run=${runParam})`,
+        colors.yellow,
+      );
 
       const fixturesPath = resolve(process.cwd(), "tests/fixtures/artifacts");
-      const zipName = runParam === "mini" ? "small-test-fixture.zip" : `${artifactId}.zip`;
+      const zipName =
+        runParam === "mini" ? "small-test-fixture.zip" : `${artifactId}.zip`;
       const zipPath = join(fixturesPath, zipName);
 
       log("ZIP", `Looking for fixture at: ${zipPath}`, colors.yellow);
@@ -234,12 +259,18 @@ app.get("/api/download-artifact", async ({ query, set }) => {
 
       if (!ghRes.ok) {
         set.status = ghRes.status;
-        return { error: `GitHub API error: ${ghRes.status} ${ghRes.statusText}` };
+        return {
+          error: `GitHub API error: ${ghRes.status} ${ghRes.statusText}`,
+        };
       }
 
       const buffer = await ghRes.arrayBuffer();
       zipData = new Uint8Array(buffer);
-      log("ZIP", `Downloaded from GitHub, size: ${zipData.length} bytes`, colors.green);
+      log(
+        "ZIP",
+        `Downloaded from GitHub, size: ${zipData.length} bytes`,
+        colors.green,
+      );
     }
 
     endTimer("downloadArtifact", "Downloaded artifact");
@@ -288,7 +319,9 @@ app.get("/api/workflow-runs", async ({ set }) => {
 
     if (!runsResponse.ok) {
       set.status = runsResponse.status;
-      return { error: `GitHub API error: ${runsResponse.status} ${runsResponse.statusText}` };
+      return {
+        error: `GitHub API error: ${runsResponse.status} ${runsResponse.statusText}`,
+      };
     }
 
     const runsData = await runsResponse.json();
@@ -332,30 +365,44 @@ app.get("/api/workflow-runs", async ({ set }) => {
         }
 
         const logText = await logsResponse.text();
-        log("DEBUG", `Got logs for run ${run.id}, length: ${logText.length}`, colors.yellow);
+        log(
+          "DEBUG",
+          `Got logs for run ${run.id}, length: ${logText.length}`,
+          colors.yellow,
+        );
 
         // Look for repository URLs in the logs
-        const repoMatches = logText.match(/https:\/\/github\.com\/([^/\s]+\/[^/\s]+)/g) || [];
-        const uniqueRepos = [...new Set(repoMatches.map(url => url.split('github.com/')[1]))];
+        const repoMatches =
+          logText.match(/https:\/\/github\.com\/([^/\s]+\/[^/\s]+)/g) || [];
+        const uniqueRepos = [
+          ...new Set(repoMatches.map((url) => url.split("github.com/")[1])),
+        ];
 
         const repository = uniqueRepos[0] || "";
         const issueMatch = logText.match(/(?:issues|pulls)\/(\d+)/);
         const issueId = issueMatch ? issueMatch[1] : "";
 
-        log("DEBUG", `Found repo: ${repository}, issue: ${issueId}`, colors.yellow);
+        log(
+          "DEBUG",
+          `Found repo: ${repository}, issue: ${issueId}`,
+          colors.yellow,
+        );
 
         return {
           ...run,
           repository,
-          issueId
+          issueId,
         };
-      })
+      }),
     );
 
     const data = { ...runsData, workflow_runs: runs };
     endTimer("workflowRuns", "Workflow runs fetch completed");
     set.status = 200;
-    set.headers = { "content-type": "application/json", "access-control-allow-origin": "*" };
+    set.headers = {
+      "content-type": "application/json",
+      "access-control-allow-origin": "*",
+    };
     return data;
   } catch (error: any) {
     log("ERROR", `Failed to fetch workflow runs: ${error.message}`, colors.red);
@@ -380,8 +427,8 @@ app.get("/api/artifacts", async ({ query, set }) => {
       const entries = await readdir(dirPath);
 
       const artifacts = entries
-        .filter(name => name.endsWith(".zip"))
-        .map(name => ({
+        .filter((name) => name.endsWith(".zip"))
+        .map((name) => ({
           id: name.replace(".zip", ""),
           name: name.replace(".zip", ""),
           archive_download_url: "",
@@ -390,7 +437,10 @@ app.get("/api/artifacts", async ({ query, set }) => {
       log("API", `Found ${artifacts.length} test artifacts`, colors.green);
       endTimer("getArtifactsList", "Retrieved test artifacts list");
       set.status = 200;
-      set.headers = { "content-type": "application/json", "access-control-allow-origin": "*" };
+      set.headers = {
+        "content-type": "application/json",
+        "access-control-allow-origin": "*",
+      };
       return { artifacts };
     } else {
       // Fetch from GitHub
@@ -406,18 +456,27 @@ app.get("/api/artifacts", async ({ query, set }) => {
 
       if (!response.ok) {
         set.status = response.status;
-        return { error: `GitHub API error: ${response.status} ${response.statusText}` };
+        return {
+          error: `GitHub API error: ${response.status} ${response.statusText}`,
+        };
       }
 
       const data = await response.json();
       log("API", `Found ${data.artifacts.length} artifacts`, colors.green);
       endTimer("getArtifactsList", "Fetched artifacts list");
       set.status = 200;
-      set.headers = { "content-type": "application/json", "access-control-allow-origin": "*" };
+      set.headers = {
+        "content-type": "application/json",
+        "access-control-allow-origin": "*",
+      };
       return { artifacts: data.artifacts };
     }
   } catch (error: any) {
-    log("ERROR", `Failed to fetch artifacts list: ${error.message}`, colors.red);
+    log(
+      "ERROR",
+      `Failed to fetch artifacts list: ${error.message}`,
+      colors.red,
+    );
     set.status = 500;
     return { error: error.message };
   }
@@ -436,6 +495,12 @@ app.get("/*", async ({ request, set }) => {
   return Bun.file(indexPath);
 });
 
-app.listen(PORT, () => {
-  log("SERVER", `Running on http://localhost:${PORT}`, colors.green);
-});
+app.listen(
+  {
+    port: PORT,
+    idleTimeout: 60,
+  },
+  () => {
+    log("SERVER", `Running on http://localhost:${PORT}`, colors.green);
+  },
+);
