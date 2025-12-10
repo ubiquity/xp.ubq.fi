@@ -30,7 +30,7 @@ jobs:
         .vercel
       debug_fetch_paths: |
         /
-        /api/download-artifact?id=test&run=test
+        /index.html
       debug_fetch_fail: true
     secrets:
       DENO_DEPLOY_TOKEN: ${{ secrets.DENO_DEPLOY_TOKEN }}
