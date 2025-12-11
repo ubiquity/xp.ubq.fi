@@ -9,7 +9,6 @@ jobs:
     uses: ubiquity/deno-deploy-workflow/.github/workflows/deno-deploy-reusable.yml@main
     with:
       project: xp-ubq-fi
-      preview_project: xp-ubq-fi-preview
       entrypoint: deno/artifact-proxy.ts
       bun_version: 1.2.x
       install_command: bun install
