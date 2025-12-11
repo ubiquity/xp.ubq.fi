@@ -28,5 +28,4 @@ jobs:
         .next
         .vercel
       debug_fetch_fail: true
-    secrets:
-      DENO_DEPLOY_TOKEN: ${{ secrets.DENO_DEPLOY_TOKEN }}
+    secrets: inherit
