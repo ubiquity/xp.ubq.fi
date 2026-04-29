@@ -187,7 +187,7 @@ async function serveStaticFile(filePath: string) {
   }
 }
 
-function createFileResponse(file: Uint8Array, path: string) {
+function createFileResponse(file: Uint8Array<ArrayBuffer>, path: string) {
 
   const contentType = {
     '.html': 'text/html',
@@ -268,7 +268,7 @@ Deno.serve(async (req: Request) => {
     log("ZIP", `Artifact download request: ${artifactId}`, colors.blue);
 
     try {
-      let zipData: Uint8Array;
+      let zipData: Uint8Array<ArrayBuffer>;
 
       if (url.searchParams.get("run") === "test") {
         // Serve test fixture from static path

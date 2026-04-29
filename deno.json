@@ -1,0 +1,10 @@
+{
+  "tasks": {
+    "build": "deno run -A tools/build.ts",
+    "serve": "deno run --allow-all deno/artifact-proxy.ts"
+  },
+  "compilerOptions": {
+    "lib": ["deno.ns", "dom", "dom.iterable", "esnext"],
+    "strict": true
+  }
+}
