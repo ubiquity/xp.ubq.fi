@@ -53,3 +53,6 @@ tests/fixtures/artifacts/**/*.json
 tests/fixtures/artifacts/results-*/rewards_summary.csv
 tests/fixtures/artifacts/**/*.csv
 wasm/wasm-unzipper/target
+
+# Cloudflare deploy bundle (assembled by tools/build-assets.ts)
+.cf-assets/
