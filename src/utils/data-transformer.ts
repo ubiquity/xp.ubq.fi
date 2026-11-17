@@ -1,13 +1,15 @@
 import { get, groupBy, maxBy, meanBy, minBy, sumBy } from 'lodash';
 import type { ActivityData, CommentData, DataDimension } from '../types/data-types';
 
+type VisualizationRow = Record<string, unknown>;
+
 /**
  * Transform ActivityData array based on selected dimensions for visualization
  */
 export function transformDataForVisualization(
   data: ActivityData[],
   dimensions: DataDimension[]
-): any[] {
+): VisualizationRow[] {
   if (!data || data.length === 0 || !dimensions || dimensions.length === 0) {
     return [];
   }
@@ -34,9 +36,9 @@ export function transformDataForVisualization(
 /**
  * Transform data for a single dimension
  */
-function transformForSingleDimension(data: ActivityData[], dimension: DataDimension): any[] {
+function transformForSingleDimension(data: ActivityData[], dimension: DataDimension): VisualizationRow[] {
   // Extract data based on dimension's accessor
-  let extractedData: any[] = [];
+  const extractedData: VisualizationRow[] = [];
 
   if (dimension.accessor.startsWith('comments.')) {
     // Handle comment-level data
@@ -115,9 +117,9 @@ function transformForTwoDimensions(
   data: ActivityData[],
   dimension1: DataDimension,
   dimension2: DataDimension
-): any[] {
+): VisualizationRow[] {
   // Extract data points with both dimensions
-  const dataPoints: any[] = [];
+  const dataPoints: VisualizationRow[] = [];
 
   // Process based on the type of data we're dealing with
   if (
@@ -155,8 +157,8 @@ function transformForTwoDimensions(
     // At least one dimension is at the contributor level
     data.forEach(activity => {
       activity.contributors.forEach(contributor => {
-        let value1: any;
-        let value2: any;
+        let value1: unknown;
+        let value2: unknown;
 
         if (dimension1.accessor.startsWith('contributors.')) {
           value1 = getValueFromAccessor(
@@ -206,8 +208,8 @@ function transformForTwoDimensions(
   } else {
     // Handle generic case (e.g., issue level, activity level)
     data.forEach(activity => {
-      let value1: any;
-      let value2: any;
+      let value1: unknown;
+      let value2: unknown;
 
       if (dimension1.accessor.startsWith('comments.')) {
         // Aggregate comment values for this activity
@@ -271,17 +273,17 @@ function transformForTwoDimensions(
 function transformForMultipleDimensions(
   data: ActivityData[],
   dimensions: DataDimension[]
-): any[] {
+): VisualizationRow[] {
   // Extract primary dimensions (first three)
   const primaryDimensions = dimensions.slice(0, 3);
 
   // Extract data points with all dimensions
-  const dataPoints: any[] = [];
+  const dataPoints: VisualizationRow[] = [];
 
   // Process each activity
   data.forEach(activity => {
     // For simplicity in the MVP, focus on activity-level data aggregation
-    const point: any = {
+    const point: VisualizationRow = {
       issueId: activity.issue.id,
       repository: activity.issue.repository,
       timestamp: activity.timestamp
@@ -291,7 +293,7 @@ function transformForMultipleDimensions(
     let hasAllDimensions = true;
 
     for (const dimension of primaryDimensions) {
-      let value: any;
+      let value: unknown;
 
       if (dimension.accessor.startsWith('comments.')) {
         // Aggregate comment values for this activity
@@ -355,7 +357,7 @@ function getValueFromAccessor(obj: any, accessor: string): any {
 /**
  * Aggregate data based on dimension properties
  */
-function aggregateData(data: any[], dimension: DataDimension): any[] {
+function aggregateData(data: VisualizationRow[], dimension: DataDimension): VisualizationRow[] {
   if (dimension.dataType === 'categorical') {
     // Group by value and count occurrences
     const grouped = groupBy(data, 'value');
@@ -384,7 +386,7 @@ function aggregateCommentValues(
   comments: CommentData[],
   accessor: string,
   aggregation: string
-): any {
+): unknown {
   if (!comments || comments.length === 0) {
     return undefined;
   }
@@ -419,14 +421,14 @@ function aggregateCommentValues(
  * Aggregate numerical values by categorical dimension
  */
 function aggregateByCategory(
-  data: any[],
+  data: VisualizationRow[],
   categoryField: string,
   valueField: string
-): any[] {
+): VisualizationRow[] {
   const grouped = groupBy(data, categoryField);
 
   return Object.entries(grouped).map(([category, items]) => {
-    const aggregated: any = {
+    const aggregated: VisualizationRow = {
       [categoryField]: category,
       [`${valueField}_sum`]: sumBy(items, valueField),
       [`${valueField}_avg`]: meanBy(items, valueField),
@@ -437,8 +439,13 @@ function aggregateByCategory(
 
     // Add min/max if we have more than one item
     if (items.length > 1) {
-      aggregated[`${valueField}_min`] = minBy(items, valueField)[valueField];
-      aggregated[`${valueField}_max`] = maxBy(items, valueField)[valueField];
+      const minimum = minBy(items, valueField);
+      const maximum = maxBy(items, valueField);
+      if (!minimum || !maximum) {
+        throw new TypeError(`No comparable values for ${valueField}`);
+      }
+      aggregated[`${valueField}_min`] = minimum[valueField];
+      aggregated[`${valueField}_max`] = maximum[valueField];
     }
 
     return aggregated;
@@ -449,14 +456,14 @@ function aggregateByCategory(
  * Aggregate multi-dimensional data by a categorical field
  */
 function aggregateMultiDimensionalData(
-  data: any[],
+  data: VisualizationRow[],
   categoryField: string,
   valueFields: string[]
-): any[] {
+): VisualizationRow[] {
   const grouped = groupBy(data, categoryField);
 
   return Object.entries(grouped).map(([category, items]) => {
-    const result: any = {
+    const result: VisualizationRow = {
       [categoryField]: category,
       count: items.length
     };
@@ -470,8 +477,13 @@ function aggregateMultiDimensionalData(
 
       // Add min/max if we have more than one item
       if (items.length > 1) {
-        result[`${field}_min`] = minBy(items, field)[field];
-        result[`${field}_max`] = maxBy(items, field)[field];
+        const minimum = minBy(items, field);
+        const maximum = maxBy(items, field);
+        if (!minimum || !maximum) {
+          throw new TypeError(`No comparable values for ${field}`);
+        }
+        result[`${field}_min`] = minimum[field];
+        result[`${field}_max`] = maximum[field];
       }
     });
 

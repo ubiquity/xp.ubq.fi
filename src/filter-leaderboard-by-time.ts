@@ -28,9 +28,7 @@ export function filterLeaderboardDataByTime(
         for (const point of entry.series) {
             const pointTimeMs = new Date(point.time).getTime();
             if (pointTimeMs <= cutoffTimeMs) {
-                // Assuming TimeSeriesEntry has org/repo and point has issue identifier
-                // Adjust this based on the actual structure if different
-                const issueKey = `${entry.org}/${entry.repo}#${point.issue}`; // Construct the key
+                const issueKey = `${point.repo}#${point.issueOrPr}`;
                 if (!cumulativeXpAtCutoff[contributor][issueKey]) {
                     cumulativeXpAtCutoff[contributor][issueKey] = 0;
                 }

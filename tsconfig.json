@@ -26,5 +26,5 @@
     "noUnusedParameters": false,
     "noPropertyAccessFromIndexSignature": false
   },
-  "exclude": ["tools/server.ts"]
+  "exclude": ["deno/", "tools/build-assets.ts"]
 }
