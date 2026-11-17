@@ -25,6 +25,10 @@ This project uses Bun and TypeScript for development.
 - `bun run build`: Build for production
 - `bun run start`: Start server without watching
 
+### Verifying changes
+
+Run `bun run check` to type-check the project, run the tests, and build both bundles. The live GitHub artifact test runs only when `GITHUB_OWNER`, `GITHUB_REPO`, and `GITHUB_TOKEN` are set.
+
 ### Architecture
 
 - **Frontend**: Plain HTML, CSS, and TypeScript

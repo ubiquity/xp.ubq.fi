@@ -3,9 +3,12 @@
   "version": "0.1.0",
   "scripts": {
     "build": "bun run tools/build.ts",
-    "type-check": "tsc --noEmit --watch",
+    "type-check": "bun run --bun tsc --noEmit",
+    "type-check:watch": "bun run --bun tsc --noEmit --watch",
+    "test": "bun test",
+    "check": "bun run type-check && bun run test && bun run build",
     "dev:server": "bun --hot run tools/server.ts",
-    "dev:frontend": "run-p watch type-check",
+    "dev:frontend": "bun run --bun run-p watch type-check:watch",
     "dev:enhanced": "bun run tools/dev.ts",
     "dev:start-server": "bun --watch run tools/server.ts",
     "dev": "bun run tools/dev.ts",
@@ -15,6 +18,7 @@
   "devDependencies": {
     "@types/bun": "^1.2.9",
     "@types/glob": "^8.1.0",
+    "@types/lodash": "^4.17.27",
     "bun-types": "^1.2.9",
     "esbuild": "^0.25.2",
     "npm-run-all": "^4.1.5",
@@ -23,11 +27,13 @@
   },
   "dependencies": {
     "@elysiajs/static": "^1.2.0",
+    "@supabase/supabase-js": "^2.119.0",
     "@zip.js/zip.js": "^2.7.60",
     "chokidar": "^4.0.3",
     "elysia": "^1.2.25",
     "fflate": "^0.8.2",
     "glob": "^11.0.1",
-    "jose": "^6.0.10"
+    "jose": "^6.0.10",
+    "lodash": "^4.18.1"
   }
 }

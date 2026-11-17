@@ -27,8 +27,5 @@ const workerBuild = esbuild.build({
   define,
 });
 
-Promise.all([mainBuild, workerBuild])
-  .then(() => {
-    console.log("Build complete (main + worker)");
-  })
-  .catch(console.error);
+await Promise.all([mainBuild, workerBuild]);
+console.log("Build complete (main + worker)");

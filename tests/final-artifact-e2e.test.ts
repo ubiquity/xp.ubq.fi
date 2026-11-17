@@ -1,11 +1,10 @@
-console.log(">>> Starting final-artifact-e2e.test.ts (using JS unzip)");
-// Import the JS-based unzip function
+import { expect, test } from "bun:test";
+import type { Artifact } from "../src/types";
 import { unzipArtifact } from "../src/unzip-artifact";
-
-// Bun automatically loads .env, no need for dotenv import
 
 const ARTIFACT_NAME = "final-aggregated-results";
 const AGGREGATED_JSON = "aggregated_results.json";
+const missingGitHubCredentials = !process.env.GITHUB_OWNER || !process.env.GITHUB_REPO || !process.env.GITHUB_TOKEN;
 
 // Helper to fetch artifact metadata from GitHub API
 async function fetchArtifactMetadata(): Promise<{ id: number; name: string } | null> {
@@ -29,10 +28,10 @@ async function fetchArtifactMetadata(): Promise<{ id: number; name: string } | n
   if (!res.ok) {
     throw new Error(`Failed to fetch artifacts list: ${res.status} ${res.statusText}`);
   }
-  const data = await res.json();
-  const artifact = data.artifacts.find((a: any) => a.name === ARTIFACT_NAME);
+  const data: { artifacts: Artifact[] } = await res.json();
+  const artifact = data.artifacts.find((a) => a.name === ARTIFACT_NAME);
   if (!artifact) {
-    const available = data.artifacts.map((a: any) => a.name).join(", ");
+    const available = data.artifacts.map((a) => a.name).join(", ");
     console.error(`Artifact ${ARTIFACT_NAME} not found in repo ${owner}/${repo}`);
     console.error("Available artifacts:", available);
     throw new Error(`Artifact ${ARTIFACT_NAME} not found. See above for available artifacts.`);
@@ -40,7 +39,8 @@ async function fetchArtifactMetadata(): Promise<{ id: number; name: string } | n
   return { id: artifact.id, name: artifact.name };
 }
 
-test("Download, unzip, and parse aggregated_results.json from final-aggregated-results.zip", async () => {
+test.skipIf(missingGitHubCredentials)("Download, unzip, and parse aggregated_results.json from final-aggregated-results.zip", async () => {
+  console.log(">>> Starting final-artifact-e2e.test.ts (using JS unzip)");
   console.log(">>> Test started: Download, unzip, and parse aggregated_results.json");
   // 1. Fetch artifact metadata (id)
   const artifactMeta = await fetchArtifactMetadata();
@@ -61,8 +61,8 @@ test("Download, unzip, and parse aggregated_results.json from final-aggregated-r
       },
     }
   );
-  const data = await res.json();
-  const artifact = data.artifacts.find((a: any) => a.id === artifactMeta.id);
+  const data: { artifacts: Artifact[] } = await res.json();
+  const artifact = data.artifacts.find((a) => a.id === artifactMeta.id);
   if (!artifact) throw new Error("Artifact not found by id after metadata fetch");
   const archiveUrl = artifact.archive_download_url;
   if (!archiveUrl) throw new Error("archive_download_url missing from artifact metadata");
